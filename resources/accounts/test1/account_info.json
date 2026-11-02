@@ -1,0 +1,12 @@
+{
+  "userId": 1,
+  "username": "test1",
+  "displayName": "đạt",
+  "password": "1234567890",
+  "role": "USER",
+  "status": "ACTIVE",
+  "registrationDate": "2026-10-26 01:04:04 (GMT+7)",
+  "registeredTimestamp": 1792951444790,
+  "isoTimestamp": "2026-10-26T01:04:04.790000+07:00",
+  "bio": ""
+}

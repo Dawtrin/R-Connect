@@ -1,0 +1,38 @@
+[
+  {
+    "userId": 1,
+    "username": "test1",
+    "displayName": "đạt",
+    "password": "1234567890",
+    "role": "USER",
+    "status": "ACTIVE",
+    "registrationDate": "2026-10-26 01:04:04 (GMT+7)",
+    "registeredTimestamp": 1792951444790,
+    "isoTimestamp": "2026-10-26T01:04:04.790000+07:00",
+    "bio": ""
+  },
+  {
+    "userId": 2,
+    "username": "Dawtrin",
+    "displayName": "Dawtrin",
+    "password": "1234567890",
+    "role": "USER",
+    "status": "ACTIVE",
+    "registrationDate": "2026-11-01 11:48:19 (GMT+7)",
+    "registeredTimestamp": 1793508499997,
+    "isoTimestamp": "2026-11-01T11:48:19.997000+07:00",
+    "bio": ""
+  },
+  {
+    "userId": 3,
+    "username": "RinnSan",
+    "displayName": "RinnSan",
+    "password": "1234567890",
+    "role": "USER",
+    "status": "ACTIVE",
+    "registrationDate": "2026-11-01 15:48:19 (GMT+7)",
+    "registeredTimestamp": 1793522899997,
+    "isoTimestamp": "2026-11-01T15:48:19.997000+07:00",
+    "bio": ""
+  }
+]

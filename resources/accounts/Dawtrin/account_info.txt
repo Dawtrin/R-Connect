@@ -1,0 +1,12 @@
+==================================================
+           THÔNG TIN TÀI KHOẢN R-CONNECT          
+==================================================
+Mã người dùng (User ID)    : 2
+Tên đăng nhập (Username)   : Dawtrin
+Tên hiển thị (Display Name): Dawtrin
+Mật khẩu (Password)        : 1234567890
+Vai trò (Role)             : USER
+Trạng thái (Status)        : ACTIVE
+Thời gian đăng ký          : 2026-11-01 11:48:19 (GMT+7)
+Tiểu sử (Bio)              : (Trống)
+==================================================

@@ -1,0 +1,25 @@
+{
+  "userId": 2,
+  "username": "Dawtrin",
+  "totalMessagesSent": 1,
+  "friendsCount": 1,
+  "friends": [
+    {
+      "friendUserId": 3,
+      "friendUsername": "RinnSan"
+    }
+  ],
+  "messagesSent": [
+    {
+      "messageId": 1,
+      "conversationId": 1,
+      "conversationType": "DIRECT",
+      "conversationTitle": null,
+      "sequence": 1,
+      "kind": "TEXT",
+      "content": "Xin chào RinnSan! Mình là Dawtrin đây. 👋 Chào mừng bạn đến với R-Connect!",
+      "sentAt": "2026-11-02 02:48:19 (GMT+7)",
+      "timestamp": 1793562499997
+    }
+  ]
+}
