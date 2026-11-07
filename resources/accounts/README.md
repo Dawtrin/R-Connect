@@ -18,8 +18,5 @@ Mỗi tài khoản có một thư mục riêng biệt mang tên người dùng:
 - `activity_history.json`: Toàn bộ dữ liệu hoạt động (tin nhắn đã gửi, danh sách bạn bè).
 - `message_history.txt`: Nhật ký các tin nhắn đã gửi theo dòng thời gian.
 
-## 3. Cách cập nhật đồng bộ
-Khi có thêm người dùng mới hoặc có thêm tin nhắn gửi trong ứng dụng, có thể chạy lại script đồng bộ:
-```bash
-python tools/export_user_resources.py
-```
+## 3. Cơ chế tự động đồng bộ
+Hệ thống tự động cập nhật các file trên ngay khi có bất kỳ tin nhắn mới hoặc tài khoản mới nào được tạo trong ứng dụng mà không cần thao tác thủ công.

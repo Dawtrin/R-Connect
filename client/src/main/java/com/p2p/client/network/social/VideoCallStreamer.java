@@ -72,7 +72,7 @@ public final class VideoCallStreamer implements AutoCloseable {
         } catch (AWTException ignored) {
             this.robot = null;
         }
-        initWebcam();
+        // Webcam is initialized lazily in background capture thread when preview or streaming starts
     }
 
     private void initWebcam() {
@@ -114,8 +114,12 @@ public final class VideoCallStreamer implements AutoCloseable {
 
     public void setVideoEnabled(boolean enabled) {
         this.videoEnabled.set(enabled);
-        if (enabled && sourceMode == SourceMode.CAMERA && webcam != null && !webcam.isOpen()) {
-            try { webcam.open(true); } catch (Throwable ignored) {}
+        if (enabled && sourceMode == SourceMode.CAMERA) {
+            if (webcam == null) {
+                initWebcam();
+            } else if (!webcam.isOpen()) {
+                try { webcam.open(true); } catch (Throwable ignored) {}
+            }
         }
     }
 
@@ -126,7 +130,9 @@ public final class VideoCallStreamer implements AutoCloseable {
     public void setSourceMode(SourceMode mode) {
         this.sourceMode = mode;
         if (mode == SourceMode.CAMERA) {
-            if (webcam != null && !webcam.isOpen()) {
+            if (webcam == null) {
+                initWebcam();
+            } else if (!webcam.isOpen()) {
                 try { webcam.open(true); } catch (Throwable ignored) {}
             }
         }
@@ -144,6 +150,10 @@ public final class VideoCallStreamer implements AutoCloseable {
         running.set(true);
 
         captureThread = new Thread(() -> {
+            if (sourceMode == SourceMode.CAMERA && (webcam == null || !webcam.isOpen())) {
+                initWebcam();
+            }
+
             ImageWriter writer = null;
             ImageWriteParam writeParam = null;
             Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");

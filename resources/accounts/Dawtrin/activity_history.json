@@ -1,25 +1,31 @@
 {
-  "userId": 2,
-  "username": "Dawtrin",
-  "totalMessagesSent": 1,
-  "friendsCount": 1,
-  "friends": [
-    {
-      "friendUserId": 3,
-      "friendUsername": "RinnSan"
-    }
-  ],
-  "messagesSent": [
-    {
-      "messageId": 1,
-      "conversationId": 1,
-      "conversationType": "DIRECT",
-      "conversationTitle": null,
-      "sequence": 1,
-      "kind": "TEXT",
-      "content": "Xin chào RinnSan! Mình là Dawtrin đây. 👋 Chào mừng bạn đến với R-Connect!",
-      "sentAt": "2026-11-02 02:48:19 (GMT+7)",
-      "timestamp": 1793562499997
-    }
-  ]
+  "userId" : 2,
+  "username" : "Dawtrin",
+  "totalMessagesSent" : 2,
+  "friendsCount" : 1,
+  "friends" : [ {
+    "friendUserId" : 3,
+    "friendUsername" : "RinnSan"
+  } ],
+  "messagesSent" : [ {
+    "messageId" : 1,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 1,
+    "kind" : "TEXT",
+    "content" : "Xin chào RinnSan! Mình là Dawtrin đây. 👋 Chào mừng bạn đến với R-Connect!",
+    "sentAt" : "2026-11-02 02:48:19 (GMT+7)",
+    "timestamp" : 1793562499997
+  }, {
+    "messageId" : 7,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 7,
+    "kind" : "TEXT",
+    "content" : "Oke test😆",
+    "sentAt" : "2026-11-05 00:38:13 (GMT+7)",
+    "timestamp" : 1793813893871
+  } ]
 }

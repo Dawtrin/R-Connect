@@ -18,3 +18,13 @@ backups/
 docs/
 tools/
 scripts/
+*.class
+*.doc
+*.docx
+*.pdf
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+CheckCam.java
+TestAudio.java

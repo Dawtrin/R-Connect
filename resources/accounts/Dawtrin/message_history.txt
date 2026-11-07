@@ -1,10 +1,15 @@
 ==================================================
    LỊCH SỬ TIN NHẮN ĐÃ GỬI - TÀI KHOẢN: Dawtrin
 ==================================================
-Tổng số tin nhắn đã gửi: 1
+Tổng số tin nhắn đã gửi: 2
 
 [1] Thời gian: 2026-11-02 02:48:19 (GMT+7)
     Cuộc hội thoại: #1 (DIRECT)
     Loại: TEXT
     Nội dung: Xin chào RinnSan! Mình là Dawtrin đây. 👋 Chào mừng bạn đến với R-Connect!
+--------------------------------------------------
+[2] Thời gian: 2026-11-05 00:38:13 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: Oke test😆
 --------------------------------------------------

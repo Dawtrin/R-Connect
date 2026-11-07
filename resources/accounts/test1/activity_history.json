@@ -1,8 +1,8 @@
 {
-  "userId": 1,
-  "username": "test1",
-  "totalMessagesSent": 0,
-  "friendsCount": 0,
-  "friends": [],
-  "messagesSent": []
+  "userId" : 1,
+  "username" : "test1",
+  "totalMessagesSent" : 0,
+  "friendsCount" : 0,
+  "friends" : [ ],
+  "messagesSent" : [ ]
 }

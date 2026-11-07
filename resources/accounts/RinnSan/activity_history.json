@@ -1,69 +1,61 @@
 {
-  "userId": 3,
-  "username": "RinnSan",
-  "totalMessagesSent": 5,
-  "friendsCount": 1,
-  "friends": [
-    {
-      "friendUserId": 2,
-      "friendUsername": "Dawtrin"
-    }
-  ],
-  "messagesSent": [
-    {
-      "messageId": 2,
-      "conversationId": 1,
-      "conversationType": "DIRECT",
-      "conversationTitle": null,
-      "sequence": 2,
-      "kind": "TEXT",
-      "content": "Chào Dawtrin! R-Connect hoạt động rất mượt mà. 🚀 Sẵn sàng kết nối rồi nhé!",
-      "sentAt": "2026-11-02 03:48:19 (GMT+7)",
-      "timestamp": 1793566099997
-    },
-    {
-      "messageId": 3,
-      "conversationId": 1,
-      "conversationType": "DIRECT",
-      "conversationTitle": null,
-      "sequence": 3,
-      "kind": "TEXT",
-      "content": "Helo",
-      "sentAt": "2026-11-02 12:07:02 (GMT+7)",
-      "timestamp": 1793596022841
-    },
-    {
-      "messageId": 4,
-      "conversationId": 1,
-      "conversationType": "DIRECT",
-      "conversationTitle": null,
-      "sequence": 4,
-      "kind": "TEXT",
-      "content": "😇",
-      "sentAt": "2026-11-02 12:17:26 (GMT+7)",
-      "timestamp": 1793596646015
-    },
-    {
-      "messageId": 5,
-      "conversationId": 1,
-      "conversationType": "DIRECT",
-      "conversationTitle": null,
-      "sequence": 5,
-      "kind": "FILE",
-      "content": "Tin nhắn thoại (5s)",
-      "sentAt": "2026-11-02 12:17:40 (GMT+7)",
-      "timestamp": 1793596660268
-    },
-    {
-      "messageId": 6,
-      "conversationId": 1,
-      "conversationType": "DIRECT",
-      "conversationTitle": null,
-      "sequence": 6,
-      "kind": "FILE",
-      "content": "Chapter 01.pptx",
-      "sentAt": "2026-11-02 12:18:12 (GMT+7)",
-      "timestamp": 1793596692558
-    }
-  ]
+  "userId" : 3,
+  "username" : "RinnSan",
+  "totalMessagesSent" : 5,
+  "friendsCount" : 1,
+  "friends" : [ {
+    "friendUserId" : 2,
+    "friendUsername" : "Dawtrin"
+  } ],
+  "messagesSent" : [ {
+    "messageId" : 2,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 2,
+    "kind" : "TEXT",
+    "content" : "Chào Dawtrin! R-Connect hoạt động rất mượt mà. 🚀 Sẵn sàng kết nối rồi nhé!",
+    "sentAt" : "2026-11-02 03:48:19 (GMT+7)",
+    "timestamp" : 1793566099997
+  }, {
+    "messageId" : 3,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 3,
+    "kind" : "TEXT",
+    "content" : "Helo",
+    "sentAt" : "2026-11-02 12:07:02 (GMT+7)",
+    "timestamp" : 1793596022841
+  }, {
+    "messageId" : 4,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 4,
+    "kind" : "TEXT",
+    "content" : "😇",
+    "sentAt" : "2026-11-02 12:17:26 (GMT+7)",
+    "timestamp" : 1793596646015
+  }, {
+    "messageId" : 5,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 5,
+    "kind" : "FILE",
+    "content" : "Tin nhắn thoại (5s)",
+    "sentAt" : "2026-11-02 12:17:40 (GMT+7)",
+    "timestamp" : 1793596660268
+  }, {
+    "messageId" : 6,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 6,
+    "kind" : "FILE",
+    "content" : "Chapter 01.pptx",
+    "sentAt" : "2026-11-02 12:18:12 (GMT+7)",
+    "timestamp" : 1793596692558
+  } ]
 }
