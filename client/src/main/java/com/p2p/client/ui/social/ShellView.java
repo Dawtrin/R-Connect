@@ -1,34 +1,19 @@
 package com.p2p.client.ui.social;
 
-import com.p2p.client.network.social.*;
 import com.p2p.client.ui.AppIcon;
 import com.p2p.client.ui.Brand;
-import com.p2p.client.ui.Dialogs;
-import com.p2p.client.ui.ModernUI;
 import com.p2p.client.ui.NavItem;
 import com.p2p.client.ui.Theme;
-import com.p2p.common.social.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
-import java.util.*;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.function.*;
-import java.util.prefs.Preferences;
 import static com.p2p.client.ui.social.Values.*;
-import com.p2p.client.ui.social.SocialWindow.Page;
 
-/** ShellView screen. Extracted from SocialWindow; behaviour is unchanged. */
+/** ShellView screen: sidebar navigation, account badge, and bottom status/language bar. */
 final class ShellView extends ViewSupport {
     ShellView(SocialWindow app) { super(app); }
 
-    // ================= MAIN CHROME =================
     void showMain() {
         app.root.removeAll();
         app.navButtons.clear();
@@ -51,27 +36,27 @@ final class ShellView extends ViewSupport {
         sidebar.add(Box.createVerticalStrut(22));
 
         // Navigation
-        sidebar.add(navButton("feed", "Bảng tin", AppIcon.Type.FEED, this::showFeed));
+        sidebar.add(navButton("feed", tr("Bảng tin", "News Feed"), AppIcon.Type.FEED, this::showFeed));
         sidebar.add(Box.createVerticalStrut(2));
-        sidebar.add(navButton("people", "Bạn bè & Tìm người", AppIcon.Type.PEOPLE, this::showPeople));
+        sidebar.add(navButton("people", tr("Bạn bè & Tìm người", "Friends & Search"), AppIcon.Type.PEOPLE, this::showPeople));
         sidebar.add(Box.createVerticalStrut(16));
-        sidebar.add(navButton("conversations", "Tin nhắn & Nhóm", AppIcon.Type.CHAT, this::showConversations));
+        sidebar.add(navButton("conversations", tr("Tin nhắn & Nhóm", "Messages & Groups"), AppIcon.Type.CHAT, this::showConversations));
         sidebar.add(Box.createVerticalStrut(2));
-        app.broadcastNav = navButton("broadcast", "Kênh chung", AppIcon.Type.BROADCAST, this::showBroadcast);
+        app.broadcastNav = navButton("broadcast", tr("Kênh thông báo", "Public Channel"), AppIcon.Type.BROADCAST, this::showBroadcast);
         sidebar.add(app.broadcastNav);
         sidebar.add(Box.createVerticalStrut(16));
-        app.notificationNav = navButton("notifications", "Thông báo", AppIcon.Type.NOTIFICATION, this::showNotifications);
+        app.notificationNav = navButton("notifications", tr("Thông báo", "Notifications"), AppIcon.Type.NOTIFICATION, this::showNotifications);
         sidebar.add(app.notificationNav);
         sidebar.add(Box.createVerticalStrut(2));
-        sidebar.add(navButton("settings", "Hồ sơ & Cài đặt", AppIcon.Type.SETTINGS, this::showSettings));
+        sidebar.add(navButton("settings", tr("Hồ sơ & Cài đặt", "Profile & Settings"), AppIcon.Type.SETTINGS, this::showSettings));
         if ("ADMIN".equals(str(app.currentUser, "role"))) {
             sidebar.add(Box.createVerticalStrut(2));
-            sidebar.add(navButton("admin", "Quản trị hệ thống", AppIcon.Type.SHIELD, this::showAdmin));
+            sidebar.add(navButton("admin", tr("Quản trị hệ thống", "System Admin"), AppIcon.Type.SHIELD, this::showAdmin));
         }
 
         sidebar.add(Box.createVerticalGlue());
 
-        JButton resume = ghost("Tiếp tục tải tệp", new AppIcon(AppIcon.Type.FOLDER, Theme.TEXT_SECONDARY, 16), () -> app.media.resumeUploads(app));
+        JButton resume = ghost(tr("Tiếp tục tải tệp", "Active Transfers"), new AppIcon(AppIcon.Type.FOLDER, Theme.TEXT_SECONDARY, 16), () -> app.media.resumeUploads(app));
         resume.setHorizontalAlignment(SwingConstants.LEFT);
         resume.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         resume.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -99,7 +84,9 @@ final class ShellView extends ViewSupport {
         app.identity.setFont(Theme.font(Font.BOLD, 13));
         app.identity.setForeground(Theme.TEXT);
         app.identity.putClientProperty("html.disable", true);
-        JLabel roleLabel = new JLabel("ADMIN".equals(str(app.currentUser, "role")) ? "Quản trị viên" : "Thành viên");
+        JLabel roleLabel = new JLabel("ADMIN".equals(str(app.currentUser, "role"))
+                ? tr("Quản trị viên", "Administrator")
+                : tr("Thành viên", "Member"));
         roleLabel.setFont(Theme.font(Font.PLAIN, 11));
         roleLabel.setForeground(Theme.MUTED);
         identityBox.add(Box.createVerticalGlue());
@@ -110,10 +97,10 @@ final class ShellView extends ViewSupport {
 
         JButton logoutBtn = Theme.ghostButton("");
         logoutBtn.setIcon(new AppIcon(AppIcon.Type.LOGOUT, Theme.TEXT_SECONDARY, 17));
-        logoutBtn.setToolTipText("Đăng xuất");
-        logoutBtn.getAccessibleContext().setAccessibleName("Đăng xuất");
+        logoutBtn.setToolTipText(tr("Đăng xuất", "Sign Out"));
+        logoutBtn.getAccessibleContext().setAccessibleName(tr("Đăng xuất", "Sign Out"));
         logoutBtn.setPreferredSize(new Dimension(34, 34));
-        logoutBtn.putClientProperty("FlatLaf.style", "margin:4,4,4,4; hoverBackground:" + "#2A1517" + "; arc:" + Theme.RADIUS_MD);
+        logoutBtn.putClientProperty("FlatLaf.style", "margin:4,4,4,4; hoverBackground:#2A1517; arc:" + Theme.RADIUS_MD);
         logoutBtn.addActionListener(e -> logout());
         JPanel logoutSlot = new JPanel(new GridBagLayout());
         logoutSlot.setOpaque(false);
@@ -121,7 +108,7 @@ final class ShellView extends ViewSupport {
         account.add(logoutSlot, BorderLayout.EAST);
         sidebar.add(account);
 
-        // Status strip (real app.connection state; text updated by the networking callbacks)
+        // Status strip
         JPanel footer = new JPanel(new BorderLayout(12, 0));
         footer.setBackground(Theme.NAV_BACKGROUND);
         footer.setBorder(BorderFactory.createCompoundBorder(
@@ -132,13 +119,18 @@ final class ShellView extends ViewSupport {
         app.connection.setFont(Theme.font(Font.PLAIN, 12));
         app.connection.setIcon(new AppIcon(AppIcon.Type.DOT, Theme.SUCCESS, 10));
         app.connection.setIconTextGap(8);
-        app.connection.setText("Đã kết nối TCP · " + app.host + ":" + app.port);
+        app.connection.setText(tr("Đã kết nối TCP · ", "TCP Connected · ") + app.host + ":" + app.port + (app.udp != null ? " · UDP" : ""));
 
-        JButton sync = ghost("Đồng bộ", new AppIcon(AppIcon.Type.REFRESH, Theme.TEXT_SECONDARY, 13), () -> query("STATE_SYNC", of("limit", 20), r -> {
+        JButton langSwitch = ghost(isEn() ? "🌐 EN → VI" : "🌐 VI → EN", app::toggleLanguage);
+        langSwitch.setToolTipText(tr("Chuyển ngôn ngữ giao diện sang Tiếng Anh", "Switch interface language to Vietnamese"));
+        langSwitch.setFont(Theme.font(Font.BOLD, 11));
+        langSwitch.putClientProperty("FlatLaf.style", "margin:2,8,2,8;");
+
+        JButton sync = ghost(tr("Đồng bộ", "Sync"), new AppIcon(AppIcon.Type.REFRESH, Theme.TEXT_SECONDARY, 13), () -> query("STATE_SYNC", of("limit", 20), r -> {
             app.refreshCurrent.run();
             refreshCount();
         }));
-        JButton relogin = ghost("Đăng nhập lại", () -> {
+        JButton relogin = ghost(tr("Đăng nhập lại", "Re-login"), () -> {
             app.reconnectToken++;
             if (app.client != null) app.client.close();
             showAuth(false);
@@ -149,6 +141,7 @@ final class ShellView extends ViewSupport {
         relogin.putClientProperty("FlatLaf.style", "margin:2,8,2,8;");
         JPanel footerActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         footerActions.setOpaque(false);
+        footerActions.add(langSwitch);
         footerActions.add(sync);
         footerActions.add(relogin);
         footer.add(app.connection, BorderLayout.CENTER);
@@ -182,7 +175,6 @@ final class ShellView extends ViewSupport {
         refreshCount();
     }
 
-    /** Ctrl+1…6 jump between the main sections; shown in each navigation item's tooltip. */
     void installShortcuts() {
         String[] keys = {"feed", "people", "conversations", "broadcast", "notifications", "settings"};
         for (int i = 0; i < keys.length; i++) {

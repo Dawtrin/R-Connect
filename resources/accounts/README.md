@@ -1,6 +1,6 @@
 # THƯ MỤC RESOURCE QUẢN LÝ TÀI KHOẢN VÀ LỊCH SỬ HOẠT ĐỘNG (R-CONNECT)
 
-Thư mục này lưu trữ thông tin tài khoản, mật khẩu, thời gian đăng ký và toàn bộ lịch sử hoạt động (tin nhắn đã gửi, bạn bè) của từng người dùng trong hệ thống R-Connect.
+Thư mục này lưu trữ thông tin tài khoản, thời gian đăng ký và lịch sử hoạt động (tin nhắn đã gửi, bạn bè) của từng người dùng trong hệ thống R-Connect.
 
 ## 1. Danh sách tài khoản
 
@@ -9,6 +9,7 @@ Thư mục này lưu trữ thông tin tài khoản, mật khẩu, thời gian đ
 | `1` | **`test1`** | đạt | `1234567890` | USER | 2026-10-26 01:04:04 (GMT+7) |
 | `2` | **`Dawtrin`** | Dawtrin | `1234567890` | USER | 2026-11-01 11:48:19 (GMT+7) |
 | `3` | **`RinnSan`** | RinnSan | `1234567890` | USER | 2026-11-01 15:48:19 (GMT+7) |
+| `4` | **`admin`** | Quản trị viên | `1234567890` | ADMIN | 2026-11-24 12:00:23 (GMT+7) |
 
 ## 2. Cấu trúc thư mục
 

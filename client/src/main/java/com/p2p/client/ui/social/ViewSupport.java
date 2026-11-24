@@ -29,6 +29,8 @@ abstract class ViewSupport {
     final SocialWindow app;
     boolean isActive() { return app.isActive(); }
     ViewSupport(SocialWindow app) { this.app = app; }
+    String tr(String vi, String en) { return app.tr(vi, en); }
+    boolean isEn() { return app.isEn(); }
 
     void shutdown() { app.shutdown(); }
     JButton button(String text, Runnable action) { return app.button(text, action); }

@@ -1,7 +1,7 @@
 {
   "userId" : 3,
   "username" : "RinnSan",
-  "totalMessagesSent" : 5,
+  "totalMessagesSent" : 25,
   "friendsCount" : 1,
   "friends" : [ {
     "friendUserId" : 2,
@@ -43,7 +43,7 @@
     "conversationType" : "DIRECT",
     "conversationTitle" : null,
     "sequence" : 5,
-    "kind" : "FILE",
+    "kind" : "TEXT",
     "content" : "Tin nhắn thoại (5s)",
     "sentAt" : "2026-11-02 12:17:40 (GMT+7)",
     "timestamp" : 1793596660268
@@ -53,9 +53,209 @@
     "conversationType" : "DIRECT",
     "conversationTitle" : null,
     "sequence" : 6,
-    "kind" : "FILE",
+    "kind" : "TEXT",
     "content" : "Chapter 01.pptx",
     "sentAt" : "2026-11-02 12:18:12 (GMT+7)",
     "timestamp" : 1793596692558
+  }, {
+    "messageId" : 8,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 8,
+    "kind" : "TEXT",
+    "content" : "alo",
+    "sentAt" : "2026-11-16 13:33:27 (GMT+7)",
+    "timestamp" : 1794810807166
+  }, {
+    "messageId" : 10,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 10,
+    "kind" : "TEXT",
+    "content" : "giật mình",
+    "sentAt" : "2026-11-16 13:34:48 (GMT+7)",
+    "timestamp" : 1794810888446
+  }, {
+    "messageId" : 11,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 11,
+    "kind" : "TEXT",
+    "content" : "thằng l",
+    "sentAt" : "2026-11-16 13:34:50 (GMT+7)",
+    "timestamp" : 1794810890006
+  }, {
+    "messageId" : 15,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 15,
+    "kind" : "TEXT",
+    "content" : "ủa",
+    "sentAt" : "2026-11-16 13:35:45 (GMT+7)",
+    "timestamp" : 1794810945024
+  }, {
+    "messageId" : 16,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 16,
+    "kind" : "TEXT",
+    "content" : "sao chuyển tiếng anh",
+    "sentAt" : "2026-11-16 13:35:50 (GMT+7)",
+    "timestamp" : 1794810950423
+  }, {
+    "messageId" : 17,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 17,
+    "kind" : "TEXT",
+    "content" : "mà m nhắn vẫn tiéng việt thế",
+    "sentAt" : "2026-11-16 13:35:55 (GMT+7)",
+    "timestamp" : 1794810955390
+  }, {
+    "messageId" : 20,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 20,
+    "kind" : "TEXT",
+    "content" : "ủa",
+    "sentAt" : "2026-11-16 13:36:48 (GMT+7)",
+    "timestamp" : 1794811008235
+  }, {
+    "messageId" : 21,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 21,
+    "kind" : "TEXT",
+    "content" : "so cài đặt",
+    "sentAt" : "2026-11-16 13:36:51 (GMT+7)",
+    "timestamp" : 1794811011690
+  }, {
+    "messageId" : 22,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 22,
+    "kind" : "TEXT",
+    "content" : "lại có hè",
+    "sentAt" : "2026-11-16 13:36:54 (GMT+7)",
+    "timestamp" : 1794811014178
+  }, {
+    "messageId" : 23,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 23,
+    "kind" : "TEXT",
+    "content" : ":)))",
+    "sentAt" : "2026-11-16 13:36:55 (GMT+7)",
+    "timestamp" : 1794811015083
+  }, {
+    "messageId" : 25,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 25,
+    "kind" : "TEXT",
+    "content" : "thấy ch",
+    "sentAt" : "2026-11-16 13:38:53 (GMT+7)",
+    "timestamp" : 1794811133046
+  }, {
+    "messageId" : 26,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 26,
+    "kind" : "TEXT",
+    "content" : "vô",
+    "sentAt" : "2026-11-16 13:41:56 (GMT+7)",
+    "timestamp" : 1794811316964
+  }, {
+    "messageId" : 27,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 27,
+    "kind" : "TEXT",
+    "content" : "nhóm",
+    "sentAt" : "2026-11-16 13:41:57 (GMT+7)",
+    "timestamp" : 1794811317991
+  }, {
+    "messageId" : 28,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 28,
+    "kind" : "TEXT",
+    "content" : "ủa nó có dịch nè",
+    "sentAt" : "2026-11-16 13:42:07 (GMT+7)",
+    "timestamp" : 1794811327830
+  }, {
+    "messageId" : 32,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 32,
+    "kind" : "TEXT",
+    "content" : "là sao",
+    "sentAt" : "2026-11-16 13:44:22 (GMT+7)",
+    "timestamp" : 1794811462864
+  }, {
+    "messageId" : 33,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 33,
+    "kind" : "TEXT",
+    "content" : "nhóm ngu",
+    "sentAt" : "2026-11-16 13:44:26 (GMT+7)",
+    "timestamp" : 1794811466909
+  }, {
+    "messageId" : 34,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 34,
+    "kind" : "TEXT",
+    "content" : "là nhóm gì",
+    "sentAt" : "2026-11-16 13:44:30 (GMT+7)",
+    "timestamp" : 1794811470589
+  }, {
+    "messageId" : 36,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 36,
+    "kind" : "TEXT",
+    "content" : "tri khungf",
+    "sentAt" : "2026-11-17 14:13:36 (GMT+7)",
+    "timestamp" : 1794899616783
+  }, {
+    "messageId" : 37,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 37,
+    "kind" : "TEXT",
+    "content" : "tri hihi",
+    "sentAt" : "2026-11-17 14:13:40 (GMT+7)",
+    "timestamp" : 1794899620021
+  }, {
+    "messageId" : 38,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 38,
+    "kind" : "FILE",
+    "content" : "tacnslide.docx",
+    "sentAt" : "2026-11-17 14:14:21 (GMT+7)",
+    "timestamp" : 1794899661921
   } ]
 }

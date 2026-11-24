@@ -1,30 +1,16 @@
 package com.p2p.client.ui.social;
 
-import com.p2p.client.network.social.*;
 import com.p2p.client.ui.AppIcon;
-import com.p2p.client.ui.Brand;
-import com.p2p.client.ui.Dialogs;
 import com.p2p.client.ui.ModernUI;
-import com.p2p.client.ui.NavItem;
 import com.p2p.client.ui.Theme;
-import com.p2p.common.social.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
 import java.util.*;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.function.*;
-import java.util.prefs.Preferences;
 import static com.p2p.client.ui.social.Values.*;
 import com.p2p.client.ui.social.SocialWindow.Page;
 
-/** Friends, requests and people search as a list/detail screen. */
+/** Friends, requests and people search as a bilingual list/detail screen. */
 final class PeopleView extends ViewSupport {
     private enum Mode { FRIENDS, INCOMING, OUTGOING, SEARCH }
 
@@ -40,21 +26,18 @@ final class PeopleView extends ViewSupport {
 
     PeopleView(SocialWindow app) { super(app); }
 
-    /** Opens the screen on the friends list (navigation entry point). */
     void showPeople() {
         mode = Mode.FRIENDS;
         selectedUid = 0;
         build();
     }
 
-    /** Opens the screen on a given list: FRIENDS, INCOMING, OUTGOING or SEARCH. */
     void openMode(String kind) {
         mode = Mode.valueOf(kind);
         selectedUid = 0;
         build();
     }
 
-    /** Rebuilds after a change while keeping the current list. */
     void refreshPeople() {
         selectedUid = 0;
         build();
@@ -76,7 +59,7 @@ final class PeopleView extends ViewSupport {
         top.setOpaque(false);
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.setBorder(new EmptyBorder(18, 16, 10, 16));
-        JLabel title = new JLabel("Bạn bè");
+        JLabel title = new JLabel(tr("Bạn bè", "Friends"));
         title.setFont(Theme.font(Font.BOLD, 18));
         title.setForeground(Theme.TEXT);
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -90,17 +73,17 @@ final class PeopleView extends ViewSupport {
             boolean on = m == mode;
             JButton b = Theme.style(new JButton(), on ? Theme.ButtonStyle.SECONDARY : Theme.ButtonStyle.GHOST);
             b.setText(switch (m) {
-                case FRIENDS -> "Bạn bè";
-                case INCOMING -> "Nhận";
-                case OUTGOING -> "Đã gửi";
-                case SEARCH -> "Tìm";
+                case FRIENDS -> tr("Bạn bè", "Friends");
+                case INCOMING -> tr("Nhận", "Incoming");
+                case OUTGOING -> tr("Đã gửi", "Sent");
+                case SEARCH -> tr("Tìm", "Search");
             });
             b.setFont(Theme.font(Font.BOLD, 12));
             b.setToolTipText(switch (m) {
-                case FRIENDS -> "Danh sách bạn bè";
-                case INCOMING -> "Lời mời kết bạn đã nhận";
-                case OUTGOING -> "Lời mời kết bạn đã gửi";
-                case SEARCH -> "Tìm người dùng";
+                case FRIENDS -> tr("Danh sách bạn bè", "Friends list");
+                case INCOMING -> tr("Lời mời kết bạn đã nhận", "Incoming friend requests");
+                case OUTGOING -> tr("Lời mời kết bạn đã gửi", "Outgoing friend requests");
+                case SEARCH -> tr("Tìm người dùng", "Search users");
             });
             b.addActionListener(e -> { mode = m; selectedUid = 0; build(); });
             segments.put(m, b);
@@ -113,8 +96,8 @@ final class PeopleView extends ViewSupport {
         searchField = new JTextField();
         searchField.setName("userSearch");
         Theme.styleInput(searchField);
-        searchField.putClientProperty("JTextField.placeholderText", "Tên hiển thị hoặc tên đăng nhập");
-        searchField.getAccessibleContext().setAccessibleName("Tìm người dùng");
+        searchField.putClientProperty("JTextField.placeholderText", tr("Tên hiển thị hoặc tên đăng nhập", "Display name or username"));
+        searchField.getAccessibleContext().setAccessibleName(tr("Tìm người dùng", "Search users"));
         searchField.setPreferredSize(new Dimension(100, 36));
         searchField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         searchField.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -153,23 +136,27 @@ final class PeopleView extends ViewSupport {
         if (mode == Mode.SEARCH) {
             app.compactNext = true;
             listPage = app.new Page("", "USER_SEARCH", of("query", ""), this::searchRow);
-            listPage.status.setText("Nhập ít nhất 2 ký tự để tìm kiếm.");
+            listPage.status.setText(tr("Nhập ít nhất 2 ký tự để tìm kiếm.", "Enter at least 2 characters to search."));
             listPage.more.setEnabled(false);
             listPage.emptyIcon = AppIcon.Type.SEARCH;
-            listPage.emptyTitle = "Không tìm thấy ai";
-            listPage.emptyHint = "Thử một tên hoặc tên đăng nhập khác.";
+            listPage.emptyTitle = tr("Không tìm thấy ai", "No users found");
+            listPage.emptyHint = tr("Thử một tên hoặc tên đăng nhập khác.", "Try a different name or username.");
             JPanel hint = new JPanel(new GridBagLayout());
             listHolder.add(listPage.panel);
             searchField.addActionListener(e -> {
                 String q = searchField.getText().trim();
-                if (q.length() < 2) { warn("Nhập ít nhất 2 ký tự để tìm kiếm."); return; }
+                if (q.length() < 2) {
+                    warn(tr("Nhập ít nhất 2 ký tự để tìm kiếm.", "Enter at least 2 characters to search."));
+                    return;
+                }
                 listPage.base.put("query", q);
                 listPage.load(true);
                 hint.setVisible(false);
             });
             hint.setOpaque(false);
-            hint.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.SEARCH, Theme.MUTED, 26), "Tìm người dùng",
-                    "Nhập tên rồi nhấn Enter để tìm."));
+            hint.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.SEARCH, Theme.MUTED, 26),
+                    tr("Tìm người dùng", "Search Users"),
+                    tr("Nhập tên rồi nhấn Enter để tìm.", "Type a name and press Enter to search.")));
             listHolder.add(hint, BorderLayout.NORTH);
             hint.setName("searchHint");
             SwingUtilities.invokeLater(() -> searchField.requestFocusInWindow());
@@ -179,9 +166,18 @@ final class PeopleView extends ViewSupport {
             listPage = app.new Page("", "RELATION_LIST", of("kind", kind), r -> relationRow(r, kind));
             listPage.emptyIcon = AppIcon.Type.PEOPLE;
             switch (mode) {
-                case FRIENDS -> { listPage.emptyTitle = "Chưa có bạn bè"; listPage.emptyHint = "Dùng tab “Tìm” để kết nối với mọi người."; }
-                case INCOMING -> { listPage.emptyTitle = "Không có lời mời mới"; listPage.emptyHint = "Lời mời kết bạn bạn nhận được sẽ hiện ở đây."; }
-                default -> { listPage.emptyTitle = "Chưa gửi lời mời nào"; listPage.emptyHint = "Lời mời bạn đã gửi đang chờ phản hồi sẽ hiện ở đây."; }
+                case FRIENDS -> {
+                    listPage.emptyTitle = tr("Chưa có bạn bè", "No friends yet");
+                    listPage.emptyHint = tr("Dùng tab “Tìm” để kết nối với mọi người.", "Use the “Search” tab to connect with people.");
+                }
+                case INCOMING -> {
+                    listPage.emptyTitle = tr("Không có lời mời mới", "No incoming requests");
+                    listPage.emptyHint = tr("Lời mời kết bạn bạn nhận được sẽ hiện ở đây.", "Friend requests sent to you will appear here.");
+                }
+                default -> {
+                    listPage.emptyTitle = tr("Chưa gửi lời mời nào", "No outgoing requests");
+                    listPage.emptyHint = tr("Lời mời bạn đã gửi đang chờ phản hồi sẽ hiện ở đây.", "Pending friend requests you sent appear here.");
+                }
             }
             listHolder.add(listPage.panel);
             listPage.load(true);
@@ -189,8 +185,6 @@ final class PeopleView extends ViewSupport {
         listHolder.revalidate();
         listHolder.repaint();
     }
-
-    // ---- rows -------------------------------------------------------------------------------------------------
 
     private JComponent relationRow(Map<String, Object> r, String kind) {
         Map<String, Object> u = relationUser(r);
@@ -200,7 +194,11 @@ final class PeopleView extends ViewSupport {
             uid = requester == id(app.currentUser, "user") ? addressee : requester;
         }
         long target = uid;
-        JLabel sub = muted("FRIENDS".equals(kind) ? "Đang cập nhật…" : "INCOMING".equals(kind) ? "Muốn kết bạn với bạn" : "Đang chờ phản hồi");
+        JLabel sub = muted("FRIENDS".equals(kind)
+                ? tr("Đang cập nhật…", "Checking…")
+                : "INCOMING".equals(kind)
+                    ? tr("Muốn kết bạn với bạn", "Sent you a friend request")
+                    : tr("Đang chờ phản hồi", "Waiting for response"));
         sub.putClientProperty("presenceUserId", target);
         return personRow(u, target, sub, () -> showDetail(target, u, r));
     }
@@ -208,7 +206,7 @@ final class PeopleView extends ViewSupport {
     private JComponent searchRow(Map<String, Object> user) {
         long uid = id(user, "user");
         boolean online = bool(user, "online");
-        JLabel sub = muted("@" + str(user, "username") + (online ? " · Đang online" : ""));
+        JLabel sub = muted("@" + str(user, "username") + (online ? tr(" · Đang online", " · Online") : ""));
         return personRow(user, uid, sub, () -> showDetail(uid, user, null));
     }
 
@@ -218,7 +216,7 @@ final class PeopleView extends ViewSupport {
         Theme.Avatar face = new Theme.Avatar(name(u), 38, false);
         row.ring(face);
         String mid = str(u, "avatarMediaId");
-        if (!mid.isBlank()) app.thumbnails.load(mid, 76, icon -> face.setImage(icon.getImage()));
+        if (!mid.isBlank()) app.thumbnails.load(mid, 76, icon -> { face.setImage(icon.getImage()); row.repaint(); });
         JPanel faceSlot = new JPanel(new GridBagLayout());
         faceSlot.setOpaque(false);
         faceSlot.add(face);
@@ -243,7 +241,7 @@ final class PeopleView extends ViewSupport {
         textSlot.add(texts, gc);
         row.add(faceSlot, BorderLayout.WEST);
         row.add(textSlot, BorderLayout.CENTER);
-        row.getAccessibleContext().setAccessibleName("Xem " + name(u));
+        row.getAccessibleContext().setAccessibleName(tr("Xem ", "View ") + name(u));
         return row;
     }
 
@@ -251,14 +249,13 @@ final class PeopleView extends ViewSupport {
         rowsByUser.forEach((uid, row) -> row.setSelected(uid == selectedUid));
     }
 
-    // ---- detail ----------------------------------------------------------------------------------------------
-
     private void showEmptyDetail() {
         detailHost.removeAll();
         JPanel center = new JPanel(new GridBagLayout());
         center.setOpaque(false);
-        center.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.PEOPLE, Theme.MUTED, 30), "Chọn một người",
-                "Xem hồ sơ, nhắn tin hoặc quản lý lời mời ở đây."));
+        center.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.PEOPLE, Theme.MUTED, 30),
+                tr("Chọn một người", "Select a Person"),
+                tr("Xem hồ sơ, nhắn tin hoặc quản lý lời mời ở đây.", "View profile, send messages, or manage friend requests here.")));
         detailHost.add(center);
         detailHost.revalidate();
         detailHost.repaint();
@@ -306,10 +303,10 @@ final class PeopleView extends ViewSupport {
         page.add(header, BorderLayout.NORTH);
 
         app.compactNext = false;
-        Page posts = app.new Page("Bài viết", "PROFILE_POSTS_GET", of("authorId", uid), this::postCard);
+        Page posts = app.new Page(tr("Bài viết", "Posts"), "PROFILE_POSTS_GET", of("authorId", uid), this::postCard);
         posts.emptyIcon = AppIcon.Type.FEED;
-        posts.emptyTitle = "Chưa có bài viết";
-        posts.emptyHint = "Bài viết bạn được phép xem của người này sẽ hiện ở đây.";
+        posts.emptyTitle = tr("Chưa có bài viết", "No posts yet");
+        posts.emptyHint = tr("Bài viết bạn được phép xem của người này sẽ hiện ở đây.", "Posts you have permission to view from this user appear here.");
         page.add(posts.panel, BorderLayout.CENTER);
 
         detailHost.add(page);
@@ -339,15 +336,16 @@ final class PeopleView extends ViewSupport {
     private JPanel actionsFor(long uid, Map<String, Object> basic, Map<String, Object> r) {
         JPanel actions = horizontal();
         if (uid == id(app.currentUser, "user")) {
-            actions.add(primary("Chỉnh sửa hồ sơ", this::showSettings));
+            actions.add(primary(tr("Chỉnh sửa hồ sơ", "Edit Profile"), this::showSettings));
             return actions;
         }
         switch (mode) {
             case FRIENDS -> {
                 long relation = r == null ? 0 : id(r, "relation");
-                actions.add(primary("Nhắn tin", () -> openDirect(uid)));
-                actions.add(button("Hủy kết bạn", () -> {
-                    if (confirm("Hủy kết bạn với người này? Bạn sẽ không thể gửi tin nhắn mới cho đến khi kết bạn lại.")) {
+                actions.add(primary(tr("Nhắn tin", "Message"), () -> openDirect(uid)));
+                actions.add(button(tr("Hủy kết bạn", "Unfriend"), () -> {
+                    if (confirm(tr("Hủy kết bạn với người này? Hai bên sẽ không còn thấy bài viết chế độ Bạn bè của nhau.",
+                            "Unfriend this user? You will no longer see each other's Friends-only posts."))) {
                         mutate("FRIEND_REMOVE", of("relationId", relation), null, x -> refreshPeople());
                     }
                 }));
@@ -355,32 +353,38 @@ final class PeopleView extends ViewSupport {
             case INCOMING -> {
                 long relation = id(r, "relation");
                 long version = num(r, "version");
-                actions.add(primary("Chấp nhận", () -> mutate("FRIEND_ACCEPT", of("relationId", relation, "expectedVersion", version), null, x -> refreshPeople())));
-                actions.add(button("Từ chối", () -> mutate("FRIEND_REJECT", of("relationId", relation, "expectedVersion", version), null, x -> refreshPeople())));
+                actions.add(primary(tr("Chấp nhận", "Accept"), () -> mutate("FRIEND_ACCEPT", of("relationId", relation, "expectedVersion", version), null, x -> refreshPeople())));
+                actions.add(button(tr("Từ chối", "Decline"), () -> mutate("FRIEND_REJECT", of("relationId", relation, "expectedVersion", version), null, x -> refreshPeople())));
             }
             case OUTGOING -> {
                 long relation = id(r, "relation");
                 long version = num(r, "version");
-                actions.add(button("Hủy lời mời", () -> mutate("FRIEND_CANCEL", of("relationId", relation, "expectedVersion", version), null, x -> refreshPeople())));
+                actions.add(button(tr("Hủy lời mời", "Cancel Request"), () -> mutate("FRIEND_CANCEL", of("relationId", relation, "expectedVersion", version), null, x -> refreshPeople())));
             }
             case SEARCH -> {
                 String relation = str(basic, "relationshipStatus");
                 if (relation.isBlank()) {
-                    actions.add(primary("Gửi lời mời kết bạn", () -> mutate("FRIEND_REQUEST", of("targetUserId", uid), null, x -> info("Đã gửi lời mời kết bạn thành công!"))));
+                    JButton reqBtn = primary(tr("Gửi lời mời kết bạn", "Add Friend"), () -> {});
+                    reqBtn.addActionListener(ev -> mutate("FRIEND_REQUEST", of("targetUserId", uid), reqBtn, x -> {
+                        info(tr("Đã gửi lời mời kết bạn thành công!", "Friend request sent!"));
+                        reqBtn.setText(tr("Đang chờ xử lý", "Request Pending"));
+                        reqBtn.setEnabled(false);
+                    }));
+                    actions.add(reqBtn);
                 } else {
-                    JButton state = button("ACCEPTED".equals(relation) ? "Đã là bạn bè" : "Đang chờ xử lý", () -> { });
+                    JButton state = button("ACCEPTED".equals(relation)
+                            ? tr("Đã là bạn bè", "Friends")
+                            : tr("Đang chờ xử lý", "Pending"), () -> { });
                     state.setEnabled(false);
                     actions.add(state);
                 }
-                actions.add(button("Nhắn tin", () -> openDirect(uid)));
+                actions.add(button(tr("Nhắn tin", "Message"), () -> openDirect(uid)));
             }
         }
-        actions.add(ghost("Báo cáo", () -> report("USER", uid)));
-        actions.add(danger("Chặn", () -> block(uid, true)));
+        actions.add(ghost(tr("Báo cáo", "Report"), () -> report("USER", uid)));
+        actions.add(danger(tr("Chặn", "Block"), () -> block(uid, true)));
         return actions;
     }
-
-    // ---- shared helpers (also used by other screens) -------------------------------------------------------
 
     Map<String, Object> relationUser(Map<String, Object> r) {
         Map<String, Object> u = map(r.get("user"));
@@ -393,11 +397,11 @@ final class PeopleView extends ViewSupport {
     void updatePresence(Container parent, long userId, boolean online, long asOf) {
         for (Component c : parent.getComponents()) {
             if (c instanceof JLabel label && Objects.equals(label.getClientProperty("presenceUserId"), userId)) {
-                label.setText(online ? "Đang online" : "Offline");
+                label.setText(online ? tr("Đang online", "Online") : "Offline");
                 label.setForeground(online ? Theme.ONLINE : Theme.MUTED);
                 label.setIcon(new AppIcon(AppIcon.Type.DOT, online ? Theme.ONLINE : Theme.MUTED, 10));
                 label.setIconTextGap(6);
-                label.setToolTipText("Trạng thái TCP · " + Values.time(of("createdAt", asOf)));
+                label.setToolTipText(tr("Trạng thái TCP · ", "TCP Presence · ") + Values.time(of("createdAt", asOf)));
             } else if (c instanceof Container child) {
                 updatePresence(child, userId, online, asOf);
             }
@@ -405,7 +409,15 @@ final class PeopleView extends ViewSupport {
     }
 
     void block(long uid, boolean blocked) {
-        if (blocked && !confirm("Chặn người dùng này? Hai bạn vẫn có thể nhìn thấy tin nhắn trong nhóm chung.")) return;
-        mutate("BLOCK_SET", of("targetUserId", uid, "blocked", blocked), null, r -> refreshPeople());
+        if (blocked && !confirm(tr("Chặn người dùng này? Hai bạn vẫn có thể nhìn thấy tin nhắn trong nhóm chung.",
+                "Block this user? You may still see each other's messages in shared groups."))) return;
+        mutate("BLOCK_SET", of("targetUserId", uid, "blocked", blocked), null, r -> {
+            if ("settings".equals(app.view)) {
+                info(blocked ? tr("Đã chặn người dùng.", "User blocked.") : tr("Đã bỏ chặn người dùng.", "User unblocked."));
+                showSettings();
+            } else {
+                refreshPeople();
+            }
+        });
     }
 }

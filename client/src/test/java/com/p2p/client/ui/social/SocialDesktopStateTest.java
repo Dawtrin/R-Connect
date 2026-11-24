@@ -119,6 +119,39 @@ class SocialDesktopStateTest {
             });
         }
     }
+    @Test void switchingLanguageUpdatesEntireDesktopChromeImmediately()throws Exception{
+        edt(()->{
+            set("currentUser",of("id",7,"username","tester","displayName","Tester","role","ADMIN"));
+            set("authenticated",true);
+            invoke("showMain",new Class<?>[0]);
+            Map<String,com.p2p.client.ui.NavItem> nav=field("navButtons");
+            assertEquals("Bảng tin",nav.get("feed").label());
+            window.applyLanguage("en");
+            assertEquals("en",field("displayLanguage"));
+            assertEquals("News Feed",nav.get("feed").label());
+            assertEquals("Messages & Groups",nav.get("conversations").label());
+            assertEquals("System Admin",nav.get("admin").label());
+            window.applyLanguage("vi");
+            assertEquals("vi",field("displayLanguage"));
+            assertEquals("Bảng tin",nav.get("feed").label());
+            return null;
+        });
+    }
+    @Test void broadcastViewShowsComposerOnlyForAdmin()throws Exception{
+        edt(()->{
+            set("currentUser",of("id",8,"username","member1","displayName","Member","role","USER"));
+            set("authenticated",true);
+            invoke("showMain",new Class<?>[0]);
+            invoke("showBroadcast",new Class<?>[0]);
+            assertNull(window.broadcastView.broadcastInput);
+            set("currentUser",of("id",1,"username","admin","displayName","Admin","role","ADMIN"));
+            invoke("showMain",new Class<?>[0]);
+            invoke("showBroadcast",new Class<?>[0]);
+            assertNotNull(window.broadcastView.broadcastInput);
+            assertTrue(window.broadcastView.broadcastInput.isEnabled());
+            return null;
+        });
+    }
     @Test void paintAuthAndMainCardsAtNormalAndMinimumSize()throws Exception{
         Path output=Path.of("..",".tmp","ui-qa").toAbsolutePath().normalize();Files.createDirectories(output);
         try(TransportStub transport=new TransportStub()){

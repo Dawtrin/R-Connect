@@ -299,4 +299,27 @@ class ProtocolRuntimeTest {
             assertEquals("VERIFIED",a.call("MEDIA_DOWNLOAD_VERIFIED",Map.of("transferId",download,"actualSize",bytes.length,"actualSha256",hash)).get("state"));
         }
     }
+    @Test void broadcastChannelRequiresAdminRoleAndReplaysRecentToNewLogin()throws Exception {
+        server.service().bootstrapAdmin("sysadmin","System Admin","Runtime-Password-123");
+        try(Client alice=client();Client admin=client()) {
+            alice.hello();admin.hello();
+            alice.register("alice");
+            alice.login("alice");
+            admin.login("sysadmin");
+            error("ACTION_FORBIDDEN",alice.attempt("BROADCAST_SEND",Map.of("content","User spam attempt"),UUID.randomUUID().toString()));
+            Map<String,Object> sent=admin.call("BROADCAST_SEND",Map.of("content","Bảo trì máy chủ lúc 23:00"));
+            assertEquals("ADMIN",sent.get("senderRole"));
+            Map<String,Object> live=alice.event("BROADCAST_MESSAGE").getPayload();
+            assertEquals("Bảo trì máy chủ lúc 23:00",live.get("content"));
+            assertEquals("ADMIN",live.get("senderRole"));
+        }
+        try(Client bob=client()) {
+            bob.hello();
+            bob.register("bob");
+            bob.login("bob");
+            Map<String,Object> replayed=bob.event("BROADCAST_MESSAGE").getPayload();
+            assertEquals("Bảo trì máy chủ lúc 23:00",replayed.get("content"));
+            assertEquals(Boolean.TRUE,replayed.get("replayed"));
+        }
+    }
 }

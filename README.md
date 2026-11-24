@@ -1,105 +1,86 @@
 # R-Connect — Nền Tảng Mạng Xã Hội Desktop & Gọi Video P2P
 
-Ứng dụng mạng xã hội và liên lạc thời gian thực cho máy tính (Desktop Application), được xây dựng trên nền tảng **Java 17**, giao diện đồ họa **Swing / FlatLaf (Dark Obsidian Theme)**, kết hợp kiến trúc mạng lai **Client–Server qua TCP/IP** và **P2P Streaming qua UDP**.
+Ứng dụng mạng xã hội và liên lạc thời gian thực cho máy tính (Desktop Application), được xây dựng trên nền tảng **Java 17**, giao diện đồ họa **Swing / FlatLaf (Dark Obsidian Theme)**, kết hợp kiến trúc mạng lai **Client–Server qua TCP/IP** và **LAN Discovery / Realtime Streaming qua UDP**.
 
 ---
 
 ## 🌟 Tính Năng Nổi Bật
 
 ### 1. 🎥 Gọi Video & Gọi Thoại P2P (UDP Real-time Streaming)
-- **Hỗ trợ phần cứng camera vật lý:** Tự động kết nối tới webcam máy tính (DirectShow Native / Sarxos Webcam API), phát hình ảnh mượt mà ở độ phân giải tối ưu 18–20 FPS.
-- **Local PiP Preview tức thì:** Cửa sổ nổi phong cách Messenger hiển thị khung hình xem trước của chính bạn ngay khi bắt đầu cuộc gọi.
-- **Chia sẻ màn hình trực tiếp (Screen Share):** Chuyển đổi linh hoạt giữa Camera và luồng truyền phát màn hình desktop qua UDP.
-- **Gọi thoại P2P chất lượng cao:** Truyền tải âm thanh PCM 16-bit / 8000Hz với độ trễ cực thấp.
+- **Hỗ trợ phần cứng camera vật lý:** Kết nối trực tiếp webcam máy tính (Sarxos Webcam API), khởi tạo an toàn trên luồng nền và tắt đèn phần cứng ngay khi người dùng tắt camera.
+- **Nâng cấp cuộc gọi linh hoạt & Chia sẻ màn hình (Screen Share):** Bắt đầu gọi thoại riêng tư (không tự mở camera) và có thể bật Camera hoặc Chia sẻ màn hình bất kỳ lúc nào trong cuộc gọi.
+- **Gọi thoại P2P chất lượng cao:** Truyền tải âm thanh PCM 16-bit / 16 kHz với độ trễ thấp, tự động ngắt chuông sau 45 giây nếu không có phản hồi.
 - **Tự động Fallback:** Chế độ thẻ đại diện đồ họa thông minh khi camera đang bận hoặc chạy nhiều client trên cùng một thiết bị.
 
-### 2. 💬 Trò Chuyện & Nhắn Tin Tức Thời (TCP Socket)
-- **Tin nhắn 1-1 riêng tư & Nhóm chat:** Quản lý hội thoại thời gian thực, hiển thị trạng thái đã gửi / đã nhận / đã đọc.
-- **Kênh phát thanh (Broadcast):** Gửi thông điệp toàn hệ thống đến tất cả người dùng đang trực tuyến.
-- **Truyền tệp & Đa phương tiện:** Gửi ảnh, tin nhắn thoại (Voice note), tài liệu có mã băm SHA-256 xác thực toàn vẹn dữ liệu.
-- **Chỉ báo đang nhập tin (Typing Indicator):** Phản hồi thời gian thực qua UDP port chuyên dụng.
+### 2. 💬 Trò Chuyện Đa Chế Độ & Truyền Tệp Tin Cậy (TCP + UDP)
+- **3 chế độ truyền tin:** Tin nhắn riêng 1–1 (*Unicast*), Nhóm chat công khai & mời bạn bè (*Group Multicast tầng ứng dụng*), và Kênh thông báo hệ thống một chiều từ Quản trị viên (*Admin Broadcast*).
+- **Truyền tệp & Đa phương tiện:** Gửi ảnh (có xem trước trực tiếp trong khung chat), tin nhắn thoại (*Voice clip*), tài liệu lớn chia chunk 48 KiB hỗ trợ **tạm dừng / tải tiếp (Resume)** và xác thực toàn vẹn **`SHA-256`**.
+- **Dò tìm máy chủ LAN & Chỉ báo đang nhập tin:** Quét tự động máy chủ trong mạng LAN (`UDP 5001`) và phản hồi trạng thái đang gõ phím có ký xác thực HMAC (`UDP 5002`).
 
-### 3. 🌐 Mạng Xã Hội Đa Tính Năng
-- **Bảng tin & Bài viết:** Đăng tải bài viết, thiết lập quyền riêng tư (Công khai / Bạn bè / Riêng tư).
-- **Tương tác:** Thả cảm xúc, bình luận bài viết, thông báo tương tác theo thời gian thực.
-- **Quan hệ người dùng:** Tìm kiếm, kết bạn, chấp nhận/từ chối lời mời, chặn người dùng.
+### 3. 🌐 Mạng Xã Hội, Quản Trị & Đa Ngôn Ngữ (Tiếng Việt / English)
+- **Giao diện song ngữ tức thời (i18n Việt – Anh) & Dịch tin nhắn Hybrid:** Chuyển đổi ngôn ngữ toàn bộ giao diện ngay lập tức (lưu riêng theo từng tài khoản); tự động dịch tin nhắn hai chiều kết hợp API trực tuyến và từ điển cụm từ Offline mở rộng cho mạng LAN nội bộ.
+- **Bảng tin & Tương tác:** Đăng bài kèm tối đa 4 ảnh, phân quyền xem (*Công khai / Bạn bè / Chỉ mình tôi*), thả tim, bình luận, kết bạn, chặn hai chiều và thông báo thời gian thực.
+- **Kiểm duyệt & Quản trị hệ thống (`ADMIN`):** Người dùng gửi báo cáo vi phạm; Quản trị viên tiếp nhận (*Claim*), ẩn bài viết/bình luận, khóa/mở khóa tài khoản và tra cứu **Nhật ký kiểm toán (*Audit Logs*)**.
 
-### 4. ⚡ Tự Động Đồng Bộ Dữ Liệu Thời Gian Thực (Zero-Touch Sync)
-- Tự động xuất và cập nhật nhật ký tin nhắn và thông tin tài khoản ra các tệp định dạng chuẩn `JSON` và `TXT` trong thư mục `resources/accounts/` ngay khi gửi tin mà không cần thao tác thủ công.
+### 4. ⚡ Tự Động Đồng Bộ Tài Nguyên Tài Khoản
+- Tự động xuất và cập nhật thông tin tài khoản cùng nhật ký hoạt động ra định dạng `JSON` và `TXT` trong thư mục `resources/accounts/` (tách biệt hoàn toàn với môi trường kiểm thử JUnit).
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống
+## 🏗️ Kiến Trúc Giao Thức Mạng
 
-Hệ thống kết hợp tối ưu giữa hai giao thức mạng:
-
-| Giao thức | Tỷ trọng | Mục đích & Chức năng |
+| Giao thức | Cổng mặc định | Mục đích & Chức năng |
 | :--- | :---: | :--- |
-| **TCP (Port 5000)** | **~90%** | Kết nối Client–Server tin cậy: Xác thực đăng nhập, Chat văn bản, Đăng bài, Truyền nhận tệp, Quản trị hệ thống. |
-| **UDP (Port 5001, 5002, Dynamic)** | **~10%** | Dò tìm máy chủ trong mạng LAN (Discovery), Đàm thoại âm thanh & Video Call P2P, Chia sẻ màn hình, Typing indicator. |
+| **TCP** | `5000` | Kết nối Client–Server tin cậy (`WireCodec v2`): Xác thực, Bảng tin, Chat Unicast/Group/Broadcast, Truyền tệp Resume/SHA-256, Quản trị hệ thống. |
+| **UDP (Control)** | `5001`, `5002` | Quét tìm máy chủ tự động trong mạng LAN (`DISCOVER`/`OFFER` cổng `5001`) & Chỉ báo đang nhập tin xác thực HMAC (`TYPING` cổng `5002`). |
+| **UDP (P2P Media)** | `Dynamic` | Truyền phát luồng âm thanh Voice Call PCM, hình ảnh Video Call JPEG chunking và Screen Share trực tiếp giữa hai điểm cuối. |
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Chạy Ứng Dụng
+## 🚀 Hướng Dẫn Khởi Động Nhanh
 
 ### Yêu Cầu Môi Trường
 - **Hệ điều hành:** Windows 10/11 (khuyến nghị), macOS, hoặc Linux.
 - **Java Development Kit (JDK):** Phiên bản **17** trở lên.
-- **Apache Maven:** Phiên bản **3.9+** (để đóng gói và biên dịch).
+- **Apache Maven:** Phiên bản **3.9+** (khi cần biên dịch lại mã nguồn).
 
-### Cách 1: Khởi động nhanh (Khuyên dùng trên Windows)
+### Cách 1: Chạy trực tiếp trên Windows (Đã đóng gói sẵn JAR)
+1. **Khởi động Máy chủ & Bảng điều khiển (Server Dashboard):**
+   - Nhấp đúp vào **`run-server.bat`**
+2. **Khởi động Ứng dụng Người dùng (Desktop Client):**
+   - Nhấp đúp vào **`run-client.bat`** (có thể mở đồng thời 2–3 cửa sổ Client trên cùng máy để demo chat, gọi điện và đổi ngôn ngữ độc lập).
 
-1. **Khởi động Máy chủ (Server):**
-   - Nhấp đúp vào tệp: **`run-server.bat`**
-   - Server sẽ mở cổng TCP `5000` và cổng UDP lắng nghe với Dashboard quản trị trực quan.
-
-2. **Khởi động Ứng dụng người dùng (Client):**
-   - Nhấp đúp vào tệp: **`run-client.bat`**
-   - Có thể mở nhiều cửa sổ client cùng lúc trên một máy để trải nghiệm chat và gọi điện qua lại giữa các tài khoản.
-
----
-
-### Cách 2: Biên dịch và chạy từ dòng lệnh (Maven)
-
-1. **Biên dịch và đóng gói toàn bộ dự án:**
-   ```powershell
-   mvn clean package -DskipTests
-   ```
-
-2. **Khởi động Server:**
-   ```powershell
-   java -jar server/target/server-1.0.0-SNAPSHOT-shaded.jar
-   ```
-
-3. **Khởi động Client:**
-   ```powershell
-   java -jar client/target/client-1.0.0-SNAPSHOT-shaded.jar
-   ```
+### Cách 2: Biên dịch và kiểm thử bằng Maven
+```powershell
+mvn clean package
+```
 
 ---
 
 ## 👥 Tài Khoản Trải Nghiệm Mặc Định
 
-Bạn có thể đăng nhập ngay bằng các tài khoản mẫu sẵn có hoặc bấm **"Đăng ký"** trực tiếp trên giao diện:
+Bạn có thể đăng nhập ngay bằng các tài khoản có sẵn bên dưới hoặc bấm **"Đăng ký ngay"** trên giao diện:
 
-| Tên đăng nhập (Username) | Mật khẩu (Password) | Vai trò |
-| :---: | :---: | :---: |
-| **`Dawtrin`** | `1234567890` | Người dùng (USER) |
-| **`RinnSan`** | `1234567890` | Người dùng (USER) |
-| **`test1`** | `1234567890` | Người dùng (USER) |
+| Tên đăng nhập (Username) | Mật khẩu (Password) | Vai trò | Ghi chú |
+| :---: | :---: | :---: | :--- |
+| **`admin`** | `1234567890` | **Quản trị viên (`ADMIN`)** | Phát thông báo toàn hệ thống (*Public Channel*) & Quản trị kiểm duyệt (*Report / Audit Log*) |
+| **`Dawtrin`** | `1234567890` | Người dùng (`USER`) | Tài khoản người dùng mẫu |
+| **`RinnSan`** | `1234567890` | Người dùng (`USER`) | Tài khoản người dùng mẫu |
+| **`test1`** | `1234567890` | Người dùng (`USER`) | Tài khoản người dùng mẫu |
 
 ---
 
 ## 📁 Cấu Trúc Dự Án
 
 ```text
-R-Connect/
-├── common/                  # Giao thức chung, Codec giải mã gói tin (JSON, TCP, UDP Wire)
-├── server/                  # Máy chủ trung tâm, quản lý cơ sở dữ liệu SQLite, điều phối kết nối
-├── client/                  # Giao diện FlatLaf Swing, bộ truyền phát Video/Voice Call UDP
-├── resources/               # Bộ phông chữ chuẩn BeVietnamPro và dữ liệu đồng bộ tài khoản
-├── run-server.bat           # Phím tắt khởi chạy nhanh Máy chủ
-├── run-client.bat           # Phím tắt khởi chạy nhanh Ứng dụng Client
-├── sync-resources.bat       # Phím tắt kiểm tra đồng bộ dữ liệu
-└── pom.xml                  # Cấu hình xây dựng Maven đa mô-đun (Multi-module)
+Chat-CS-P2P/
+├── common/                  # Giao thức chung, Codec đóng gói khung tin (WireCodec TCP & UdpCodec HMAC)
+├── server/                  # Máy chủ trung tâm, SQLite WAL, Media ACL, Bộ dịch Hybrid & Server Dashboard
+├── client/                  # Giao diện FlatLaf Swing song ngữ Việt/Anh, P2P Voice/Video/Screen Streamer
+├── data/                    # Cơ sở dữ liệu SQLite (social-network.db) và kho lưu trữ tệp (data/media/)
+├── resources/               # Dữ liệu đồng bộ tài khoản & lịch sử hoạt động (resources/accounts/)
+├── docs/                    # Tài liệu đặc tả kiến trúc, mô hình dữ liệu, giao thức và nghiệp vụ
+├── run-server.bat           # Khởi chạy nhanh Máy chủ kèm Server Dashboard
+├── run-client.bat           # Khởi chạy nhanh Ứng dụng Client
+└── pom.xml                  # Cấu hình Maven đa mô-đun (Multi-module)
 ```

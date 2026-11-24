@@ -158,10 +158,18 @@ public final class SocialService {
         );
         if(!Passwords.verify(old,(String)snapshot.get("salt"),((Number)snapshot.get("hashIterations")).intValue(),(String)snapshot.get("passwordHash")))throw error("INVALID_CREDENTIALS");
         String salt=Passwords.salt(),hash=Passwords.hash(next,salt,Passwords.ITERATIONS);
-        return db.write(c-> {
+        Map<String,Object> res = db.write(c-> {
             active(c,actor);Map<String,Object> current=current(c,actor);if(lng(current,"authVersion")!=lng(snapshot,"authVersion"))throw error("INVALID_CREDENTIALS");update(c,"UPDATE users SET salt=?,password_hash=?,auth_version=auth_version+1 WHERE id=?",salt,hash,actor);long version=lng(snapshot,"authVersion")+1;event(c,"SESSION_REVOKED","USER",actor,version,List.of(actor));return map("authVersion",version);
         }
         );
+        UserResourceExporter.registerPassword((String)snapshot.get("username"), next);
+        UserResourceExporter.syncAsync(db);
+        return res;
+    }
+    public void verifyCallAccess(long actor,long target)throws Exception {
+        db.read(c-> {
+            active(c,actor);directAccess(c,actor,target);return null;
+        });
     }
     public Map<String,Object> bootstrapAdmin(String username,String displayName,String password)throws Exception {
         Map<String,Object> r=register(map("username",username,"displayName",displayName,"password",password));
@@ -271,6 +279,18 @@ public final class SocialService {
                 u.remove("authVersion");
                 u.remove("role");
                 u.remove("relationshipsVersion");
+                if(a!=id) {
+                    List<Map<String,Object>> rels=rows(c,"SELECT * FROM relationships WHERE low_user_id=? AND high_user_id=? AND status IN('PENDING','ACCEPTED') LIMIT 1",Math.min(a,id),Math.max(a,id));
+                    if(!rels.isEmpty()) {
+                        Map<String,Object> r=rels.get(0);
+                        String st=String.valueOf(r.get("status"));
+                        if("ACCEPTED".equals(st))u.put("relationshipStatus","ACCEPTED");
+                        else u.put("relationshipStatus",lng(r,"requesterId")==a?"PENDING_OUTGOING":"PENDING_INCOMING");
+                        u.put("relationId",r.get("id"));
+                        u.put("relationVersion",r.get("version"));
+                    }
+                    u.put("online",presence.test(id));
+                }
                 return u;
             }
             case "PROFILE_UPDATE":case "AVATAR_SET": {
@@ -293,7 +313,8 @@ public final class SocialService {
                 if(q.length()<2)throw error("INVALID_REQUEST");
                 String pattern="%"+q.replace("!","!!").replace("%","!%").replace("_","!_")+"%";
                 String relationship="(SELECT r.status FROM relationships r WHERE r.low_user_id=min("+a+",u.id) AND r.high_user_id=max("+a+",u.id) AND r.status IN('PENDING','ACCEPTED') LIMIT 1) AS relationship_status";
-                return userPresence(page(c,a,t+q,p,"SELECT u.id,u.username,p.display_name,"+relationship+" FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.status='ACTIVE' AND u.id<>? AND(u.username LIKE ? ESCAPE '!' OR p.display_name LIKE ? ESCAPE '!') AND NOT EXISTS(SELECT 1 FROM blocks b WHERE(b.blocker_id=? AND b.blocked_id=u.id) OR(b.blocked_id=? AND b.blocker_id=u.id)) AND u.id<? ORDER BY u.id DESC",List.of(a,pattern,pattern,a,a)));
+                String avatar="(SELECT media_id FROM media_bindings WHERE avatar_user_id=u.id) AS avatar_media_id";
+                return userPresence(page(c,a,t+q,p,"SELECT u.id,u.username,p.display_name,"+avatar+","+relationship+" FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.status='ACTIVE' AND u.id<>? AND(u.username LIKE ? ESCAPE '!' OR p.display_name LIKE ? ESCAPE '!') AND NOT EXISTS(SELECT 1 FROM blocks b WHERE(b.blocker_id=? AND b.blocked_id=u.id) OR(b.blocked_id=? AND b.blocker_id=u.id)) AND u.id<? ORDER BY u.id DESC",List.of(a,pattern,pattern,a,a)));
             }
             case "USER_LIST":return userPresence(page(c,a,t,p,"SELECT u.id,u.username,p.display_name,(SELECT media_id FROM media_bindings WHERE avatar_user_id=u.id) AS avatar_media_id FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.status='ACTIVE' AND u.id<>? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE(b.blocker_id=? AND b.blocked_id=u.id) OR(b.blocked_id=? AND b.blocker_id=u.id)) AND u.id<? ORDER BY u.id DESC",List.of(a,a,a)));
             case "PRESENCE_GET": {
@@ -454,7 +475,11 @@ public final class SocialService {
                         x.remove("content");
                         x.remove("authorId");
                         x.put("tombstone",true);
-                    } else { x.put("authorName",current(c,lng(x,"authorId")).get("displayName")); }
+                    } else {
+                        Map<String,Object> ca=current(c,lng(x,"authorId"));
+                        x.put("authorName",ca.get("displayName"));
+                        x.put("authorAvatarMediaId",ca.get("avatarMediaId"));
+                    }
                 }
                 return result;
             }
@@ -592,7 +617,7 @@ public final class SocialService {
                 }
                 else id=lng(existing.get(0),"id");
                 Map<String,Object> other=current(c,b);
-                return map("conversationId",id,"kind","DIRECT","otherUserId",b,"title",other.get("displayName"),"online",presence.test(b),"asOf",now());
+                return map("conversationId",id,"kind","DIRECT","otherUserId",b,"title",other.get("displayName"),"otherUsername",other.get("username"),"avatarMediaId",other.get("avatarMediaId"),"canSend",true,"online",presence.test(b),"asOf",now());
             }
             case "CONVERSATION_LIST":return conversations(c,a,p);
             case "MESSAGE_SEND": {
@@ -691,12 +716,12 @@ public final class SocialService {
                 long id=insert(c,"INSERT INTO conversations(kind,title,owner_id,created_at,last_activity_at) VALUES('GROUP',?,?,?,?)",title,a,now(),now());
                 join(c,id,a,"OWNER",1);
                 for(long target:invitees)chatDispatch(c,a,"GROUP_INVITE",map("conversationId",id,"targetUserId",target));
-                return map("conversationId",id,"title",title,"version",1,"invitedCount",invitees.size());
+                return map("conversationId",id,"kind","GROUP","title",title,"ownerId",a,"role","OWNER","version",1,"invitedCount",invitees.size(),"memberCount",1,"canSend",false,"denyReason","NEED_MEMBERS");
             }
             case "GROUP_PUBLIC_LIST": {
                 Map<String,Object> result=orderedPage(c,a,"GROUP_PUBLIC_LIST",p,
-                        "SELECT v.*,p.display_name AS owner_name,(SELECT count(*) FROM conversation_members cm2 WHERE cm2.conversation_id=v.id AND cm2.left_at IS NULL) AS member_count,(SELECT count(*) FROM conversation_members cm3 WHERE cm3.conversation_id=v.id AND cm3.user_id=? AND cm3.left_at IS NULL) AS joined FROM conversations v JOIN profiles p ON p.user_id=v.owner_id WHERE v.kind='GROUP' AND v.status='ACTIVE'",
-                        "v.last_activity_at","lastActivityAt","v.id",List.of(a));
+                        "SELECT v.*,p.display_name AS owner_name,(SELECT count(*) FROM conversation_members cm2 WHERE cm2.conversation_id=v.id AND cm2.left_at IS NULL) AS member_count,(SELECT count(*) FROM conversation_members cm3 WHERE cm3.conversation_id=v.id AND cm3.user_id=? AND cm3.left_at IS NULL) AS joined FROM conversations v JOIN users uo ON uo.id=v.owner_id JOIN profiles p ON p.user_id=v.owner_id WHERE v.kind='GROUP' AND v.status='ACTIVE' AND uo.status='ACTIVE' AND NOT EXISTS(SELECT 1 FROM blocks b WHERE(b.blocker_id=? AND b.blocked_id=v.owner_id) OR(b.blocked_id=? AND b.blocker_id=v.owner_id))",
+                        "v.last_activity_at","lastActivityAt","v.id",List.of(a,a,a));
                 for(Object raw:(List<?>)result.get("items")) {
                     Map<String,Object> group=(Map<String,Object>)raw;
                     group.put("conversationId",lng(group,"id"));
@@ -709,8 +734,11 @@ public final class SocialService {
                 long group=number(p,"conversationId");
                 active(c,a);
                 Map<String,Object> v=one(c,"SELECT * FROM conversations WHERE id=? AND kind='GROUP' AND status='ACTIVE'",group);
+                long ownerId=lng(v,"ownerId");
+                active(c,ownerId);
+                if(blocked(c,a,ownerId))throw error("ACTION_FORBIDDEN");
                 List<Map<String,Object>> current=rows(c,"SELECT * FROM conversation_members WHERE conversation_id=? AND user_id=? AND left_at IS NULL",group,a);
-                if(!current.isEmpty()) return map("conversationId",group,"joined",true,"visibleFromSeq",current.get(0).get("visibleFromSeq"));
+                if(!current.isEmpty()) return map("conversationId",group,"kind","GROUP","title",v.get("title"),"ownerId",ownerId,"joined",true,"visibleFromSeq",current.get(0).get("visibleFromSeq"),"version",v.get("version"),"canSend",true);
                 if(lng(one(c,"SELECT count(*) n FROM conversation_members WHERE conversation_id=? AND left_at IS NULL",group),"n")>=20)throw error("QUOTA_EXCEEDED");
                 long visible=lng(v,"lastSeq")+1;
                 join(c,group,a,"MEMBER",visible);
@@ -718,7 +746,7 @@ public final class SocialService {
                 List<Long> audience=recipients(c,group);
                 long version=lng(v,"version")+1;
                 event(c,"CONVERSATION_INVALIDATED","CONVERSATION",group,version,audience);
-                return map("conversationId",group,"joined",true,"visibleFromSeq",visible,"version",version);
+                return map("conversationId",group,"kind","GROUP","title",v.get("title"),"ownerId",ownerId,"joined",true,"visibleFromSeq",visible,"version",version,"canSend",true);
             }
             case "GROUP_INVITE": {
                 long id=number(p,"conversationId"),b=number(p,"targetUserId");
@@ -829,6 +857,7 @@ public final class SocialService {
             }
             catch(SocialException e) {
                 v.put("canSend",false);
+                v.put("denyReason","GROUP".equals(v.get("kind"))?"NEED_MEMBERS":e.code());
             }
             if("DIRECT".equals(v.get("kind"))) {
                 long other=lng(v,"directLowId")==a?lng(v,"directHighId"):lng(v,"directLowId");
@@ -836,8 +865,12 @@ public final class SocialService {
                 v.put("otherUserId",other);
                 v.put("title",u.get("displayName"));
                 v.put("otherUsername",u.get("username"));
+                v.put("avatarMediaId",u.get("avatarMediaId"));
                 v.put("online",presence.test(other));
                 v.put("asOf",now());
+            } else if("GROUP".equals(v.get("kind"))) {
+                long members=lng(one(c,"SELECT count(*) AS n FROM conversation_members WHERE conversation_id=? AND left_at IS NULL",id),"n");
+                v.put("memberCount",members);
             }
         }
         return result;
@@ -932,11 +965,17 @@ public final class SocialService {
                     case "HIDE_POST"-> {
                         if(!target.equals("POST"))throw error("INVALID_REQUEST");
                         update(c,"UPDATE posts SET status='HIDDEN',version=version+1,updated_at=? WHERE id=?",now(),targetId);
-                        event(c,"POST_INVALIDATED","POST",targetId,0,List.of(lng(one(c,"SELECT author_id FROM posts WHERE id=?",targetId),"authorId")));
+                        Map<String,Object> hiddenPost=one(c,"SELECT author_id,version FROM posts WHERE id=?",targetId);
+                        List<Long> audience=new ArrayList<>(publicAudience(c));
+                        if(!audience.contains(lng(hiddenPost,"authorId")))audience.add(lng(hiddenPost,"authorId"));
+                        event(c,"POST_INVALIDATED","POST",targetId,lng(hiddenPost,"version"),audience);
                     }
                     case "HIDE_COMMENT"-> {
                         if(!target.equals("COMMENT"))throw error("INVALID_REQUEST");
                         update(c,"UPDATE comments SET status='HIDDEN' WHERE id=?",targetId);
+                        long postId=lng(one(c,"SELECT post_id FROM comments WHERE id=?",targetId),"postId");
+                        long postVersion=lng(one(c,"SELECT version FROM posts WHERE id=?",postId),"version");
+                        event(c,"COMMENT_INVALIDATED","POST",postId,postVersion,publicAudience(c));
                     }
                     case "SUSPEND_USER"-> {
                         if(!target.equals("USER"))throw error("INVALID_REQUEST");
@@ -1016,6 +1055,33 @@ public final class SocialService {
                 n.remove("commentId");
                 n.remove("relationId");
                 n.remove("groupInviteId");
+            } else {
+                if(n.get("actorId")!=null) {
+                    try {
+                        Map<String,Object> actorUser=current(c,lng(n,"actorId"));
+                        n.put("actorName",actorUser.get("displayName"));
+                        n.put("actorUsername",actorUser.get("username"));
+                        n.put("actorAvatarMediaId",actorUser.get("avatarMediaId"));
+                    } catch(Exception ignored) {}
+                }
+                if(n.get("groupInviteId")!=null) {
+                    List<Map<String,Object>> inv=rows(c,"SELECT i.conversation_id,i.status,v.title FROM group_invites i JOIN conversations v ON v.id=i.conversation_id WHERE i.id=?",n.get("groupInviteId"));
+                    if(!inv.isEmpty()) {
+                        n.put("groupTitle",inv.get(0).get("title"));
+                        n.put("inviteStatus",inv.get(0).get("status"));
+                    }
+                }
+                if(n.get("conversationId")!=null) {
+                    List<Map<String,Object>> conv=rows(c,"SELECT kind,title,direct_low_id,direct_high_id FROM conversations WHERE id=?",n.get("conversationId"));
+                    if(!conv.isEmpty()) {
+                        Map<String,Object> cv=conv.get(0);
+                        if("GROUP".equals(cv.get("kind")))n.put("conversationTitle",cv.get("title"));
+                        else {
+                            long other=lng(cv,"directLowId")==a?lng(cv,"directHighId"):lng(cv,"directLowId");
+                            try{n.put("conversationTitle",current(c,other).get("displayName"));}catch(Exception ignored){}
+                        }
+                    }
+                }
             }
         }
         long max=lng(one(c,"SELECT coalesce(max(id),0) n FROM notifications WHERE recipient_id=?",a),"n");
@@ -1115,7 +1181,9 @@ public final class SocialService {
     }
     void receipts(Connection c,Map<String,Object> message)throws Exception {
         long conv=lng(message,"conversationId"),seq=lng(message,"conversationSeq"),sender=lng(message,"senderId");
-        message.put("senderName",current(c,sender).get("displayName"));
+        Map<String,Object> senderProfile=current(c,sender);
+        message.put("senderName",senderProfile.get("displayName"));
+        message.put("senderAvatarMediaId",senderProfile.get("avatarMediaId"));
         List<Map<String,Object>> attachment=rows(c,"SELECT m.id,m.original_name,m.mime_type,m.actual_size,m.sha256 FROM media m JOIN media_bindings b ON b.media_id=m.id WHERE b.message_id=?",message.get("id"));
         if(!attachment.isEmpty()){Map<String,Object> file=attachment.get(0);message.put("media",file);message.put("fileName",file.get("originalName"));message.put("size",file.get("actualSize"));}
         Map<String,Object> counts=one(c,"SELECT count(*) AS recipient_count,sum(CASE WHEN last_delivered_seq>=? THEN 1 ELSE 0 END) AS delivered_by_count,sum(CASE WHEN last_read_seq>=? THEN 1 ELSE 0 END) AS read_by_count FROM conversation_members WHERE conversation_id=? AND user_id<>? AND left_at IS NULL AND visible_from_seq<=?",seq,seq,conv,sender,seq);

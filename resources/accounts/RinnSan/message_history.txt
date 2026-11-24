@@ -1,7 +1,7 @@
 ==================================================
    LỊCH SỬ TIN NHẮN ĐÃ GỬI - TÀI KHOẢN: RinnSan
 ==================================================
-Tổng số tin nhắn đã gửi: 5
+Tổng số tin nhắn đã gửi: 25
 
 [1] Thời gian: 2026-11-02 03:48:19 (GMT+7)
     Cuộc hội thoại: #1 (DIRECT)
@@ -20,11 +20,111 @@ Tổng số tin nhắn đã gửi: 5
 --------------------------------------------------
 [4] Thời gian: 2026-11-02 12:17:40 (GMT+7)
     Cuộc hội thoại: #1 (DIRECT)
-    Loại: FILE
+    Loại: TEXT
     Nội dung: Tin nhắn thoại (5s)
 --------------------------------------------------
 [5] Thời gian: 2026-11-02 12:18:12 (GMT+7)
     Cuộc hội thoại: #1 (DIRECT)
-    Loại: FILE
+    Loại: TEXT
     Nội dung: Chapter 01.pptx
+--------------------------------------------------
+[6] Thời gian: 2026-11-16 13:33:27 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: alo
+--------------------------------------------------
+[7] Thời gian: 2026-11-16 13:34:48 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: giật mình
+--------------------------------------------------
+[8] Thời gian: 2026-11-16 13:34:50 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: thằng l
+--------------------------------------------------
+[9] Thời gian: 2026-11-16 13:35:45 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: ủa
+--------------------------------------------------
+[10] Thời gian: 2026-11-16 13:35:50 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: sao chuyển tiếng anh
+--------------------------------------------------
+[11] Thời gian: 2026-11-16 13:35:55 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: mà m nhắn vẫn tiéng việt thế
+--------------------------------------------------
+[12] Thời gian: 2026-11-16 13:36:48 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: ủa
+--------------------------------------------------
+[13] Thời gian: 2026-11-16 13:36:51 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: so cài đặt
+--------------------------------------------------
+[14] Thời gian: 2026-11-16 13:36:54 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: lại có hè
+--------------------------------------------------
+[15] Thời gian: 2026-11-16 13:36:55 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: :)))
+--------------------------------------------------
+[16] Thời gian: 2026-11-16 13:38:53 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: thấy ch
+--------------------------------------------------
+[17] Thời gian: 2026-11-16 13:41:56 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: vô
+--------------------------------------------------
+[18] Thời gian: 2026-11-16 13:41:57 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: nhóm
+--------------------------------------------------
+[19] Thời gian: 2026-11-16 13:42:07 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: ủa nó có dịch nè
+--------------------------------------------------
+[20] Thời gian: 2026-11-16 13:44:22 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: là sao
+--------------------------------------------------
+[21] Thời gian: 2026-11-16 13:44:26 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: nhóm ngu
+--------------------------------------------------
+[22] Thời gian: 2026-11-16 13:44:30 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: là nhóm gì
+--------------------------------------------------
+[23] Thời gian: 2026-11-17 14:13:36 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: tri khungf
+--------------------------------------------------
+[24] Thời gian: 2026-11-17 14:13:40 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: tri hihi
+--------------------------------------------------
+[25] Thời gian: 2026-11-17 14:14:21 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: FILE
+    Nội dung: tacnslide.docx
 --------------------------------------------------

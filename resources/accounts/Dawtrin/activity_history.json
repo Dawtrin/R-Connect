@@ -1,7 +1,7 @@
 {
   "userId" : 2,
   "username" : "Dawtrin",
-  "totalMessagesSent" : 2,
+  "totalMessagesSent" : 16,
   "friendsCount" : 1,
   "friends" : [ {
     "friendUserId" : 3,
@@ -27,5 +27,145 @@
     "content" : "Oke test😆",
     "sentAt" : "2026-11-05 00:38:13 (GMT+7)",
     "timestamp" : 1793813893871
+  }, {
+    "messageId" : 9,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 9,
+    "kind" : "TEXT",
+    "content" : "qua chưa",
+    "sentAt" : "2026-11-16 13:34:44 (GMT+7)",
+    "timestamp" : 1794810884425
+  }, {
+    "messageId" : 12,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 12,
+    "kind" : "TEXT",
+    "content" : "🤟",
+    "sentAt" : "2026-11-16 13:35:02 (GMT+7)",
+    "timestamp" : 1794810902789
+  }, {
+    "messageId" : 13,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 13,
+    "kind" : "TEXT",
+    "content" : "lỏ r",
+    "sentAt" : "2026-11-16 13:35:10 (GMT+7)",
+    "timestamp" : 1794810910777
+  }, {
+    "messageId" : 14,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 14,
+    "kind" : "FILE",
+    "content" : "Tin nhắn thoại (8s)",
+    "sentAt" : "2026-11-16 13:35:21 (GMT+7)",
+    "timestamp" : 1794810921208
+  }, {
+    "messageId" : 18,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 18,
+    "kind" : "TEXT",
+    "content" : "Tau có làm chuyển tiếng anh đâu",
+    "sentAt" : "2026-11-16 13:36:08 (GMT+7)",
+    "timestamp" : 1794810968131
+  }, {
+    "messageId" : 19,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 19,
+    "kind" : "FILE",
+    "content" : "C4. Ly thuyet uoc luong va kiem dinh gia thiet.pdf",
+    "sentAt" : "2026-11-16 13:36:47 (GMT+7)",
+    "timestamp" : 1794811007989
+  }, {
+    "messageId" : 24,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 24,
+    "kind" : "TEXT",
+    "content" : "để tau check",
+    "sentAt" : "2026-11-16 13:37:24 (GMT+7)",
+    "timestamp" : 1794811044884
+  }, {
+    "messageId" : 29,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 29,
+    "kind" : "TEXT",
+    "content" : "nhóm",
+    "sentAt" : "2026-11-16 13:43:24 (GMT+7)",
+    "timestamp" : 1794811404354
+  }, {
+    "messageId" : 30,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 30,
+    "kind" : "TEXT",
+    "content" : "ngu",
+    "sentAt" : "2026-11-16 13:43:29 (GMT+7)",
+    "timestamp" : 1794811409085
+  }, {
+    "messageId" : 31,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 31,
+    "kind" : "TEXT",
+    "content" : "tú nghiên",
+    "sentAt" : "2026-11-16 13:43:39 (GMT+7)",
+    "timestamp" : 1794811419590
+  }, {
+    "messageId" : 35,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 35,
+    "kind" : "TEXT",
+    "content" : "Test",
+    "sentAt" : "2026-11-17 14:13:34 (GMT+7)",
+    "timestamp" : 1794899614935
+  }, {
+    "messageId" : 39,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 39,
+    "kind" : "TEXT",
+    "content" : "alooo",
+    "sentAt" : "2026-11-24 12:24:16 (GMT+7)",
+    "timestamp" : 1795497856470
+  }, {
+    "messageId" : 40,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 40,
+    "kind" : "TEXT",
+    "content" : "xin chào",
+    "sentAt" : "2026-11-24 12:24:42 (GMT+7)",
+    "timestamp" : 1795497882611
+  }, {
+    "messageId" : 41,
+    "conversationId" : 1,
+    "conversationType" : "DIRECT",
+    "conversationTitle" : null,
+    "sequence" : 41,
+    "kind" : "TEXT",
+    "content" : "chào buổi sáng",
+    "sentAt" : "2026-11-24 12:25:00 (GMT+7)",
+    "timestamp" : 1795497900095
   } ]
 }

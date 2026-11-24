@@ -1,30 +1,16 @@
 package com.p2p.client.ui.social;
 
-import com.p2p.client.network.social.*;
 import com.p2p.client.ui.AppIcon;
-import com.p2p.client.ui.Brand;
-import com.p2p.client.ui.Dialogs;
 import com.p2p.client.ui.ModernUI;
-import com.p2p.client.ui.NavItem;
 import com.p2p.client.ui.Theme;
-import com.p2p.common.social.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
 import java.util.*;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.function.*;
-import java.util.prefs.Preferences;
 import static com.p2p.client.ui.social.Values.*;
 import com.p2p.client.ui.social.SocialWindow.Page;
 
-/** Administration: report queue and audit log (list/detail) plus recovery tools. */
+/** Administration: bilingual report queue, audit log (list/detail), and recovery tools. */
 final class AdminView extends ViewSupport {
     private final Map<Long, ListRow> reportRows = new LinkedHashMap<>();
     private final Map<Long, ListRow> auditRows = new LinkedHashMap<>();
@@ -41,30 +27,32 @@ final class AdminView extends ViewSupport {
         reportDetail.setOpaque(false);
         auditDetail = new JPanel(new BorderLayout());
         auditDetail.setOpaque(false);
-        placeholder(reportDetail, "Chọn một báo cáo", "Chi tiết và quyết định xử lý hiện ở đây.");
-        placeholder(auditDetail, "Chọn một mục nhật ký", "Nội dung thao tác quản trị hiện ở đây.");
+        placeholder(reportDetail, tr("Chọn một báo cáo", "Select a Report"),
+                tr("Chi tiết và quyết định xử lý hiện ở đây.", "Report details and moderation actions appear here."));
+        placeholder(auditDetail, tr("Chọn một mục nhật ký", "Select an Audit Entry"),
+                tr("Nội dung thao tác quản trị hiện ở đây.", "Administrative audit details appear here."));
 
         app.compactNext = true;
-        Page reports = app.new Page("", "ADMIN_REPORT_LIST", of("filter", ""), r -> reportRow(r));
+        Page reports = app.new Page("", "ADMIN_REPORT_LIST", of("filter", ""), this::reportRow);
         reportsPage = reports;
         reports.emptyIcon = AppIcon.Type.SHIELD;
-        reports.emptyTitle = "Không có báo cáo";
-        reports.emptyHint = "Báo cáo vi phạm từ người dùng sẽ xuất hiện ở đây.";
+        reports.emptyTitle = tr("Không có báo cáo", "No reports");
+        reports.emptyHint = tr("Báo cáo vi phạm từ người dùng sẽ xuất hiện ở đây.", "User violation reports will appear here.");
         app.compactNext = true;
-        Page audit = app.new Page("", "ADMIN_AUDIT_LIST", of(), r -> auditRow(r));
+        Page audit = app.new Page("", "ADMIN_AUDIT_LIST", of(), this::auditRow);
         audit.emptyIcon = AppIcon.Type.FILE;
-        audit.emptyTitle = "Chưa có nhật ký";
-        audit.emptyHint = "Mọi thao tác quản trị được ghi lại tại đây.";
+        audit.emptyTitle = tr("Chưa có nhật ký", "No audit logs");
+        audit.emptyHint = tr("Mọi thao tác quản trị được ghi lại tại đây.", "Every administrative action is recorded here.");
 
         JTabbedPane tabs = new JTabbedPane();
         styleTabs(tabs);
-        tabs.addTab("Hàng đợi báo cáo", master(reports, reportDetail));
-        tabs.addTab("Nhật ký kiểm toán", master(audit, auditDetail));
-        tabs.addTab("Khôi phục & Điều phối", columnScroll(recoveryTools(), Theme.COLUMN_WIDTH));
+        tabs.addTab(tr("Hàng đợi báo cáo", "Report Queue"), master(reports, reportDetail));
+        tabs.addTab(tr("Nhật ký kiểm toán", "Audit Logs"), master(audit, auditDetail));
+        tabs.addTab(tr("Khôi phục & Điều phối", "Recovery & Governance"), columnScroll(recoveryTools(), Theme.COLUMN_WIDTH));
 
         JPanel panel = new JPanel(new BorderLayout());
         panel.setOpaque(false);
-        panel.add(centered(titled("Quản trị hệ thống"), Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
+        panel.add(centered(titled(tr("Quản trị hệ thống", "System Administration")), Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
         panel.add(tabs, BorderLayout.CENTER);
         setView("admin", panel, this::showAdmin);
         reports.load(true);
@@ -133,10 +121,9 @@ final class AdminView extends ViewSupport {
     private JComponent reportRow(Map<String, Object> r) {
         long rid = id(r, "report");
         String status = str(r, "status");
-        JComponent row = twoLineRow(rid, reportRows,
+        return twoLineRow(rid, reportRows,
                 targetText(str(r, "targetType")) + " #" + num(r, "targetId") + " · " + statusText(status),
                 str(r, "reason"), () -> reviewReport(rid));
-        return row;
     }
 
     private JComponent auditRow(Map<String, Object> r) {
@@ -150,7 +137,7 @@ final class AdminView extends ViewSupport {
         JPanel p = new JPanel(new BorderLayout(0, 12));
         p.setOpaque(false);
         p.setBorder(new EmptyBorder(24, 28, 24, 28));
-        JLabel h = new JLabel("Nhật ký quản trị #" + aid);
+        JLabel h = new JLabel(tr("Nhật ký quản trị #", "Audit Entry #") + aid);
         h.setFont(Theme.font(Font.BOLD, 18));
         h.setForeground(Theme.TEXT);
         p.add(h, BorderLayout.NORTH);
@@ -172,7 +159,6 @@ final class AdminView extends ViewSupport {
         return sp;
     }
 
-    /** Report detail and decision form, shown inline next to the queue. */
     void reviewReport(long reportId) {
         query("ADMIN_REPORT_GET", of("reportId", reportId), data -> {
             Map<String, Object> report = map(data.get("report"));
@@ -195,17 +181,18 @@ final class AdminView extends ViewSupport {
             JPanel titleRow = horizontal(h, chip);
             titleRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
             p.add(titleRow);
-            JLabel meta = muted("Báo cáo #" + reportId + " · Lý do: " + str(r, "reason"));
+            JLabel meta = muted(tr("Báo cáo #", "Report #") + reportId + tr(" · Lý do: ", " · Reason: ") + str(r, "reason"));
             meta.setAlignmentX(Component.LEFT_ALIGNMENT);
             p.add(meta);
             p.add(Box.createVerticalStrut(14));
-            JTextArea summary = readable("Người báo cáo: #" + num(r, "reporterId") + "\nMô tả: "
-                    + (str(r, "description").isBlank() ? "(không có)" : str(r, "description")));
+            JTextArea summary = readable(tr("Người báo cáo: #", "Reporter: #") + num(r, "reporterId")
+                    + tr("\nMô tả: ", "\nDescription: ")
+                    + (str(r, "description").isBlank() ? tr("(không có)", "(none)") : str(r, "description")));
             summary.setForeground(Theme.TEXT_SECONDARY);
             summary.setAlignmentX(Component.LEFT_ALIGNMENT);
             p.add(summary);
             p.add(Box.createVerticalStrut(10));
-            JLabel rawTitle = contextHeading("DỮ LIỆU GỐC");
+            JLabel rawTitle = contextHeading(tr("DỮ LIỆU GỐC", "SNAPSHOT DATA"));
             p.add(rawTitle);
             JScrollPane record = recordView(data);
             record.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -218,22 +205,23 @@ final class AdminView extends ViewSupport {
             action.setRenderer(new DefaultListCellRenderer() {
                 public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean focus) {
                     String text = switch (String.valueOf(v)) {
-                        case "HIDE_POST" -> "Ẩn bài viết";
-                        case "HIDE_COMMENT" -> "Ẩn bình luận";
-                        case "SUSPEND_USER" -> "Khóa tài khoản";
-                        default -> "Không xử lý";
+                        case "HIDE_POST" -> tr("Ẩn bài viết", "Hide post");
+                        case "HIDE_COMMENT" -> tr("Ẩn bình luận", "Hide comment");
+                        case "SUSPEND_USER" -> tr("Khóa tài khoản", "Suspend account");
+                        default -> tr("Không xử lý (Bỏ qua)", "Dismiss (No action)");
                     };
                     return super.getListCellRendererComponent(l, text, i, sel, focus);
                 }
             });
             JTextArea reason = text("", 3);
-            reason.putClientProperty("JTextField.placeholderText", "Ghi rõ căn cứ của quyết định (bắt buộc)");
-            addField(p, "Hành động xử lý", action);
-            addField(p, "Lý do quyết định", framed(reason));
+            reason.putClientProperty("JTextField.placeholderText",
+                    tr("Ghi rõ căn cứ của quyết định (bắt buộc)", "Provide justification for this decision (required)"));
+            addField(p, tr("Hành động xử lý", "Moderation Action"), action);
+            addField(p, tr("Lý do quyết định", "Decision Reason"), framed(reason));
             p.add(Box.createVerticalStrut(14));
 
-            JButton claim = Theme.secondaryButton("Nhận xử lý");
-            JButton resolve = Theme.primaryButton("Xác nhận quyết định");
+            JButton claim = Theme.secondaryButton(tr("Nhận xử lý", "Claim Report"));
+            JButton resolve = Theme.primaryButton(tr("Xác nhận quyết định", "Apply Decision"));
             claim.setEnabled("OPEN".equals(status));
             resolve.setEnabled("IN_REVIEW".equals(status) && num(r, "assignedAdminId") == id(app.currentUser, "user"));
             claim.addActionListener(e -> mutate("ADMIN_REPORT_CLAIM", of("reportId", reportId, "expectedVersion", num(r, "version")), claim, updated -> {
@@ -242,14 +230,16 @@ final class AdminView extends ViewSupport {
             }));
             resolve.addActionListener(e -> {
                 if (reason.getText().isBlank()) {
-                    warn("Vui lòng nhập lý do quyết định.");
+                    warn(tr("Vui lòng nhập lý do quyết định.", "Please enter a decision reason."));
                     return;
                 }
-                if (confirm("Áp dụng quyết định quản trị và ghi nhật ký kiểm toán?")) {
+                if (confirm(tr("Áp dụng quyết định quản trị và ghi nhật ký kiểm toán?", "Apply this moderation decision and record it in the audit log?"))) {
                     mutate("ADMIN_REPORT_RESOLVE", of("reportId", reportId, "action", action.getSelectedItem(), "reason", reason.getText(), "expectedVersion", num(r, "version")), resolve, updated -> showAdmin());
                 }
             });
-            JPanel footer = actionRow(muted(resolve.isEnabled() ? " " : "OPEN".equals(status) ? "Nhận xử lý trước khi ra quyết định." : "Báo cáo này không thể xử lý ở trạng thái hiện tại."), claim, resolve);
+            JPanel footer = actionRow(muted(resolve.isEnabled() ? " " : "OPEN".equals(status)
+                    ? tr("Nhận xử lý trước khi ra quyết định.", "Claim this report before resolving.")
+                    : tr("Báo cáo này không thể xử lý ở trạng thái hiện tại.", "This report cannot be modified in its current state.")), claim, resolve);
             p.add(footer);
             p.add(Box.createVerticalGlue());
 
@@ -269,8 +259,6 @@ final class AdminView extends ViewSupport {
         d.setVisible(true);
     }
 
-    // ---- recovery tools ------------------------------------------------------------------------------------
-
     private JPanel recoveryTools() {
         JPanel controls = vertical();
         controls.setBorder(new EmptyBorder(20, 0, 28, 0));
@@ -278,44 +266,51 @@ final class AdminView extends ViewSupport {
         JTextField user = idField(), conversation = idField(), newOwner = idField(), version = new JTextField("1");
         Theme.styleInput(version);
         JTextArea reason = text("", 3);
-        reason.putClientProperty("JTextField.placeholderText", "Bắt buộc với mọi thao tác bên dưới; được ghi vào nhật ký kiểm toán");
+        reason.putClientProperty("JTextField.placeholderText",
+                tr("Bắt buộc với mọi thao tác bên dưới; được ghi vào nhật ký kiểm toán", "Required for all actions below; recorded in the audit log"));
 
-        controls.add(section("Lý do thao tác", "Áp dụng cho mọi thao tác khôi phục bên dưới."));
+        controls.add(section(tr("Lý do thao tác", "Audit Justification"),
+                tr("Áp dụng cho mọi thao tác khôi phục bên dưới.", "Applied to all recovery operations below.")));
         controls.add(framed(reason));
         controls.add(Box.createVerticalStrut(22));
 
-        controls.add(section("Mở khóa tài khoản", "Khôi phục quyền truy cập của một người dùng đang bị khóa."));
-        addField(controls, "User ID cần mở khóa", user);
+        controls.add(section(tr("Mở khóa tài khoản", "Unsuspend Account"),
+                tr("Khôi phục quyền truy cập của một người dùng đang bị khóa.", "Restore access for a suspended user account.")));
+        addField(controls, tr("User ID cần mở khóa", "Target User ID"), user);
         controls.add(Box.createVerticalStrut(6));
-        controls.add(horizontal(primary("Mở khóa tài khoản", () -> {
+        controls.add(horizontal(primary(tr("Mở khóa tài khoản", "Unsuspend User"), () -> {
             try {
-                mutate("ADMIN_USER_UNSUSPEND", of("targetUserId", Long.parseLong(user.getText().trim()), "reason", reason.getText()), null, r -> info("Đã mở khóa tài khoản và ghi nhật ký."));
+                mutate("ADMIN_USER_UNSUSPEND", of("targetUserId", Long.parseLong(user.getText().trim()), "reason", reason.getText()), null,
+                        r -> info(tr("Đã mở khóa tài khoản và ghi nhật ký.", "User unsuspended and logged.")));
             } catch (NumberFormatException ex) {
-                warn("Nhập User ID dạng số hợp lệ.");
+                warn(tr("Nhập User ID dạng số hợp lệ.", "Enter a valid numeric User ID."));
             }
         })));
         controls.add(Box.createVerticalStrut(22));
 
-        controls.add(section("Nhóm bị khóa chủ", "Chuyển quyền chủ nhóm hoặc đóng nhóm không còn chủ hoạt động."));
-        addField(controls, "Conversation ID nhóm", conversation);
-        addField(controls, "User ID chủ nhóm mới", newOwner);
-        addField(controls, "Phiên bản nhóm hiện tại", version);
+        controls.add(section(tr("Nhóm bị khóa chủ", "Suspended Group Owner Recovery"),
+                tr("Chuyển quyền chủ nhóm hoặc đóng nhóm không còn chủ hoạt động.", "Transfer ownership or close a group whose owner is suspended.")));
+        addField(controls, tr("Conversation ID nhóm", "Group Conversation ID"), conversation);
+        addField(controls, tr("User ID chủ nhóm mới", "New Owner User ID"), newOwner);
+        addField(controls, tr("Phiên bản nhóm hiện tại", "Expected Group Version"), version);
         controls.add(Box.createVerticalStrut(6));
         controls.add(horizontal(
-                primary("Chuyển chủ nhóm", () -> {
+                primary(tr("Chuyển chủ nhóm", "Transfer Ownership"), () -> {
                     try {
-                        mutate("ADMIN_GROUP_OWNER_TRANSFER", of("conversationId", Long.parseLong(conversation.getText().trim()), "targetUserId", Long.parseLong(newOwner.getText().trim()), "expectedVersion", Long.parseLong(version.getText().trim()), "reason", reason.getText()), null, r -> info("Đã chuyển chủ nhóm và ghi nhật ký."));
+                        mutate("ADMIN_GROUP_OWNER_TRANSFER", of("conversationId", Long.parseLong(conversation.getText().trim()), "targetUserId", Long.parseLong(newOwner.getText().trim()), "expectedVersion", Long.parseLong(version.getText().trim()), "reason", reason.getText()), null,
+                                r -> info(tr("Đã chuyển chủ nhóm và ghi nhật ký.", "Group ownership transferred and logged.")));
                     } catch (NumberFormatException ex) {
-                        warn("Nhập ID và phiên bản dạng số hợp lệ.");
+                        warn(tr("Nhập ID và phiên bản dạng số hợp lệ.", "Enter valid numeric IDs and version."));
                     }
                 }),
-                danger("Đóng nhóm", () -> {
+                danger(tr("Đóng nhóm", "Close Group"), () -> {
                     try {
-                        if (confirm("Đóng nhóm này bằng quyền quản trị?")) {
-                            mutate("ADMIN_GROUP_CLOSE", of("conversationId", Long.parseLong(conversation.getText().trim()), "expectedVersion", Long.parseLong(version.getText().trim()), "reason", reason.getText()), null, r -> info("Đã đóng nhóm và ghi nhật ký."));
+                        if (confirm(tr("Đóng nhóm này bằng quyền quản trị?", "Close this group administratively?"))) {
+                            mutate("ADMIN_GROUP_CLOSE", of("conversationId", Long.parseLong(conversation.getText().trim()), "expectedVersion", Long.parseLong(version.getText().trim()), "reason", reason.getText()), null,
+                                    r -> info(tr("Đã đóng nhóm và ghi nhật ký.", "Group closed and logged.")));
                         }
                     } catch (NumberFormatException ex) {
-                        warn("Nhập ID và phiên bản dạng số hợp lệ.");
+                        warn(tr("Nhập ID và phiên bản dạng số hợp lệ.", "Enter valid numeric ID and version."));
                     }
                 })));
         return controls;
@@ -324,7 +319,7 @@ final class AdminView extends ViewSupport {
     private JTextField idField() {
         JTextField f = new JTextField();
         Theme.styleInput(f);
-        f.putClientProperty("JTextField.placeholderText", "Chỉ nhập số");
+        f.putClientProperty("JTextField.placeholderText", tr("Chỉ nhập số", "Numeric ID"));
         return f;
     }
 

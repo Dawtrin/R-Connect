@@ -24,7 +24,8 @@ import java.util.logging.Logger;
 /**
  * Real-time automatic synchronization of account data, activity history, and message logs
  * to JSON and human-readable TXT files in resources/accounts/ whenever a message is sent
- * or an account event occurs.
+ * or an account event occurs. Skips temporary/JUnit databases and stays strictly within
+ * the active project workspace.
  */
 public final class UserResourceExporter {
     private static final Logger LOG = Logger.getLogger(UserResourceExporter.class.getName());
@@ -34,16 +35,11 @@ public final class UserResourceExporter {
 
     private static final Map<String, String> KNOWN_PASSWORDS = new ConcurrentHashMap<>();
     static {
+        KNOWN_PASSWORDS.put("admin", "1234567890");
         KNOWN_PASSWORDS.put("dawtrin", "1234567890");
         KNOWN_PASSWORDS.put("rinnsan", "1234567890");
         KNOWN_PASSWORDS.put("test1", "1234567890");
     }
-
-    private static final List<Path> TARGET_DIRS = List.of(
-            Path.of("resources", "accounts"),
-            Path.of("C:", "Users", "Lenovo", "IdeaProjects", "Chat-CS-P2P", "resources", "accounts"),
-            Path.of("F:", "Chat-CS-P2P", "resources", "accounts")
-    );
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "RConnect-UserResourceExporter");
@@ -74,7 +70,7 @@ public final class UserResourceExporter {
     }
 
     /**
-     * Synchronous export: Reads DB and exports JSON & TXT files to all valid target directories.
+     * Synchronous export: Reads DB and exports JSON & TXT files to the project's resources/accounts directory.
      */
     public static void syncDirect(SocialDatabase db) {
         if (db == null) return;
@@ -88,28 +84,34 @@ public final class UserResourceExporter {
         }
     }
 
-    private static void exportFromConnection(Connection conn) {
+    private static List<Path> resolveTargetDirs(Connection conn) {
         try {
-            // Find which target directories are accessible
-            List<Path> activeTargets = new ArrayList<>();
-            for (Path p : TARGET_DIRS) {
-                Path abs = p.toAbsolutePath().normalize();
-                if (Files.exists(abs) || (abs.getParent() != null && Files.exists(abs.getParent()))) {
-                    activeTargets.add(abs);
+            String dbUrl = conn.getMetaData().getURL();
+            if (dbUrl != null) {
+                String lower = dbUrl.toLowerCase(Locale.ROOT);
+                if (lower.contains("junit") || lower.contains("temp") || lower.contains("\\tmp\\") || lower.contains("/tmp/") || lower.contains("test-social.db")) {
+                    return List.of();
                 }
-            }
-            if (activeTargets.isEmpty()) return;
-
-            // Skip export if running in a unit test temporary database
-            try {
-                String dbUrl = conn.getMetaData().getURL();
-                if (dbUrl != null) {
-                    String lower = dbUrl.toLowerCase(Locale.ROOT);
-                    if (lower.contains("junit") || lower.contains("temp") || lower.contains("tmp")) {
-                        return;
+                if (dbUrl.startsWith("jdbc:sqlite:")) {
+                    String rawPath = dbUrl.substring("jdbc:sqlite:".length());
+                    Path dbFile = Path.of(rawPath).toAbsolutePath().normalize();
+                    Path dataDir = dbFile.getParent();
+                    if (dataDir != null && dataDir.getParent() != null) {
+                        Path projectRoot = dataDir.getParent();
+                        return List.of(projectRoot.resolve("resources").resolve("accounts"));
                     }
                 }
-            } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {
+        }
+        Path local = Path.of("resources", "accounts").toAbsolutePath().normalize();
+        return List.of(local);
+    }
+
+    private static void exportFromConnection(Connection conn) {
+        try {
+            List<Path> activeTargets = resolveTargetDirs(conn);
+            if (activeTargets.isEmpty()) return;
 
             // 1. Fetch all users
             List<Map<String, Object>> users = new ArrayList<>();
@@ -145,7 +147,7 @@ public final class UserResourceExporter {
                 ZonedDateTime zdt = Instant.ofEpochMilli(cAt).atZone(VN_ZONE);
                 String dtStr = zdt.format(DISPLAY_FORMATTER);
                 String isoStr = zdt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-                String pw = KNOWN_PASSWORDS.getOrDefault(uname.toLowerCase(Locale.ROOT), "1234567890");
+                String pw = KNOWN_PASSWORDS.getOrDefault(uname.toLowerCase(Locale.ROOT), "(PBKDF2-Hashed)");
                 String bio = u.get("bio") != null ? (String) u.get("bio") : "";
 
                 // Fetch messages sent by this user
@@ -258,7 +260,7 @@ public final class UserResourceExporter {
             // Generate README.md
             StringBuilder readme = new StringBuilder();
             readme.append("# THƯ MỤC RESOURCE QUẢN LÝ TÀI KHOẢN VÀ LỊCH SỬ HOẠT ĐỘNG (R-CONNECT)\n\n")
-                    .append("Thư mục này lưu trữ thông tin tài khoản, mật khẩu, thời gian đăng ký và toàn bộ lịch sử hoạt động (tin nhắn đã gửi, bạn bè) của từng người dùng trong hệ thống R-Connect.\n\n")
+                    .append("Thư mục này lưu trữ thông tin tài khoản, thời gian đăng ký và lịch sử hoạt động (tin nhắn đã gửi, bạn bè) của từng người dùng trong hệ thống R-Connect.\n\n")
                     .append("## 1. Danh sách tài khoản\n\n")
                     .append("| User ID | Tên đăng nhập | Tên hiển thị | Mật khẩu | Vai trò | Thời gian đăng ký |\n")
                     .append("| :---: | :---: | :---: | :---: | :---: | :---: |\n");
@@ -279,7 +281,6 @@ public final class UserResourceExporter {
             String summaryJson = MAPPER.writeValueAsString(summaryList);
             String readmeStr = readme.toString();
 
-            // Write to all active target directories
             for (Path baseDir : activeTargets) {
                 try {
                     Files.createDirectories(baseDir);

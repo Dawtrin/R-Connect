@@ -21,6 +21,7 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
     private final ConcurrentMap<String, Connection> connections = new ConcurrentHashMap<>();
     private final ConcurrentMap<Long, Connection> users = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, UdpService.Session> udpSessions = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedDeque<Map<String, Object>> recentBroadcasts = new ConcurrentLinkedDeque<>();
     private final Semaphore permits;
     private final Semaphore authWorkers = new Semaphore(4);
     private final ExecutorService io, storage;
@@ -258,6 +259,12 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
                 login.put("serverTime",System.currentTimeMillis());
                 c.send(WireMessage.response(request,login));
                 presenceChanged(id);
+                for(Map<String,Object> item:recentBroadcasts) {
+                    Map<String,Object> replayed=new LinkedHashMap<>(item);
+                    replayed.put("replayed",true);
+                    try { c.send(WireMessage.event("BROADCAST_MESSAGE",replayed)); }
+                    catch(IOException ignored) { break; }
+                }
                 return;
             }
             if(c.userId==0)throw new SocialException("UNAUTHENTICATED","Cần đăng nhập");
@@ -277,9 +284,11 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
                 c.send(WireMessage.response(request,rotateUdp(c)));
                 return;
             }
-            if(!type.equals("MEDIA_UPLOAD_CHUNK")&&!type.equals("MEDIA_DOWNLOAD_ACK"))limits.check("requests:"+c.userId,180,60000);
+            if(!type.equals("MEDIA_UPLOAD_CHUNK")&&!type.equals("MEDIA_DOWNLOAD_ACK")&&!type.equals("MEDIA_THUMBNAIL_GET")&&!type.equals("MESSAGE_TRANSLATE"))limits.check("requests:"+c.userId,180,60000);
+            if(type.equals("MESSAGE_TRANSLATE"))limits.check("translate:"+c.userId,600,60000);
             if(type.equals("MESSAGE_SEND"))limits.check("messages:"+c.userId,60,60000);
             if(type.equals("CALL_SIGNAL")) {
+                limits.check("calls:"+c.userId,60,60000);
                 handleCallSignal(c, request);
                 return;
             }
@@ -320,15 +329,30 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
     private void handleCallSignal(Connection c, WireMessage request) throws Exception {
         Map<String, Object> p = request.getPayload();
         Object targetRaw = p.get("targetUserId");
-        if (targetRaw == null) throw new SocialException("INVALID_REQUEST", "Thiếu targetUserId");
-        long targetUserId = ((Number) targetRaw).longValue();
+        if (!(targetRaw instanceof Number targetNum)) throw new SocialException("INVALID_REQUEST", "Thiếu targetUserId");
+        long targetUserId = targetNum.longValue();
+        if (targetUserId <= 0 || targetUserId == c.userId) {
+            throw new SocialException("INVALID_REQUEST", "Người nhận cuộc gọi không hợp lệ");
+        }
+        String action = String.valueOf(p.getOrDefault("action", "")).trim();
+        if (!Set.of("INVITE", "ACCEPT", "REJECT", "BUSY", "HANGUP", "VIDEO_MODE").contains(action)) {
+            throw new SocialException("INVALID_REQUEST", "Tín hiệu cuộc gọi không hợp lệ");
+        }
+
+        service.verifyCallAccess(c.userId, targetUserId);
+        Map<String, Object> callerProfile = service.user(c.userId);
 
         Connection targetConn;
         synchronized (users) {
             targetConn = users.get(targetUserId);
         }
 
-        if (targetConn == null || targetConn.dead.get() || targetConn.revoked.get()) {
+        if (targetConn == null || targetConn.dead.get() || targetConn.revoked.get() || targetConn.draining) {
+            c.send(WireMessage.response(request, Map.of("delivered", false, "reason", "OFFLINE")));
+            return;
+        }
+        Map<String, Object> targetAccount = service.user(targetUserId);
+        if (!"ACTIVE".equals(targetAccount.get("status")) || ((Number) targetAccount.get("authVersion")).longValue() != targetConn.authVersion) {
             c.send(WireMessage.response(request, Map.of("delivered", false, "reason", "OFFLINE")));
             return;
         }
@@ -340,14 +364,20 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
 
         Map<String, Object> eventPayload = new LinkedHashMap<>(p);
         eventPayload.put("senderId", c.userId);
+        eventPayload.put("callerName", callerProfile.get("displayName"));
+        if (callerProfile.get("avatarMediaId") != null) {
+            eventPayload.put("callerAvatarMediaId", callerProfile.get("avatarMediaId"));
+        }
         eventPayload.put("senderHost", senderHost);
 
         targetConn.send(WireMessage.event("CALL_SIGNAL", eventPayload));
         c.send(WireMessage.response(request, Map.of("delivered", true)));
     }
 
-    /** Broadcast is an ephemeral public channel fan-out to authenticated sessions. */
+    /** Broadcast is an admin-only ephemeral system announcement fan-out to authenticated sessions. */
     private void broadcast(Connection sender,WireMessage request)throws Exception {
+        Map<String,Object> profile=service.user(sender.userId);
+        if(!"ADMIN".equals(profile.get("role")))throw new SocialException("ACTION_FORBIDDEN","Chỉ quản trị viên (Admin) mới có quyền phát thông báo trên kênh hệ thống");
         Map<String,Object> p=request.getPayload();
         if(p.size()!=1||!(p.get("content") instanceof String content))throw new SocialException("INVALID_REQUEST","Nội dung broadcast không hợp lệ");
         content=content.trim();
@@ -361,7 +391,6 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
             sender.send(WireMessage.response(request,previous));
             return;
         }
-        Map<String,Object> profile=service.user(sender.userId);
         // Resolve account/session validity before any fan-out; suspended sessions may await cleanup.
         List<Connection> audience=new ArrayList<>();
         for(Connection recipient:users.values()) {
@@ -375,8 +404,11 @@ public final class SocialServer implements AutoCloseable, UdpService.Host {
         payload.put("broadcastId",UUID.randomUUID().toString());
         payload.put("senderId",sender.userId);
         payload.put("senderName",profile.get("displayName"));
+        payload.put("senderRole","ADMIN");
         payload.put("content",content);
         payload.put("createdAt",now);
+        recentBroadcasts.addLast(Collections.unmodifiableMap(new LinkedHashMap<>(payload)));
+        while(recentBroadcasts.size()>20)recentBroadcasts.pollFirst();
         int queued=0;
         for(Connection recipient:audience) {
             if(recipient.userId==0||recipient.dead.get()||recipient.revoked.get()||recipient.draining)continue;

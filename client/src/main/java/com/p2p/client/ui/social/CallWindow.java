@@ -25,8 +25,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Messenger-style standalone floating voice and video call window for R-Connect.
- * Features live physical webcam integration via Sarxos Webcam Capture,
- * instant local camera preview (PiP), screen sharing, and UDP voice streaming.
+ * Features live physical webcam integration via Sarxos Webcam Capture (strictly off EDT),
+ * privacy-safe voice-only startup, dynamic voice-to-video upgrade, screen sharing,
+ * 45-second ringing timeout, and bilingual UI support.
  */
 public final class CallWindow extends JFrame {
     public enum State {
@@ -54,7 +55,9 @@ public final class CallWindow extends JFrame {
     private long callStartTime = 0;
     private javax.swing.Timer durationTimer;
     private javax.swing.Timer visualizerTimer;
+    private javax.swing.Timer ringingTimeoutTimer;
 
+    private final JLabel brandLabel;
     private final JLabel statusLabel;
     private final JLabel nameLabel;
     private final JPanel avatarPanel;
@@ -78,18 +81,23 @@ public final class CallWindow extends JFrame {
     private Thread ringtoneThread;
     private float[] eqLevels = new float[]{0.3f, 0.6f, 0.9f, 0.5f, 0.2f};
 
+    private String tr(String vi, String en) {
+        return app != null ? app.tr(vi, en) : vi;
+    }
+
     public CallWindow(SocialWindow app, long targetUserId, String targetDisplayName, long conversationId, String callId, boolean isCaller, boolean isVideoMode) {
-        super("Cuộc gọi · R-Connect");
+        super((app != null ? app.tr("Cuộc gọi", "Call") : "Cuộc gọi") + " · R-Connect");
         this.app = app;
         this.targetUserId = targetUserId;
-        this.targetDisplayName = (targetDisplayName == null || targetDisplayName.isBlank()) ? "Người dùng #" + targetUserId : targetDisplayName;
+        this.targetDisplayName = (targetDisplayName == null || targetDisplayName.isBlank())
+                ? tr("Người dùng #", "User #") + targetUserId : targetDisplayName;
         this.conversationId = conversationId;
         this.callId = (callId == null) ? UUID.randomUUID().toString() : callId;
         this.isCaller = isCaller;
         this.isVideoMode = isVideoMode;
         this.state = isCaller ? State.OUTGOING_RINGING : State.INCOMING_RINGING;
 
-        int initW = isVideoMode ? 680 : 360;
+        int initW = isVideoMode ? 680 : 380;
         int initH = isVideoMode ? 520 : 480;
         setSize(initW, initH);
         setLocationRelativeTo(app);
@@ -103,9 +111,9 @@ public final class CallWindow extends JFrame {
         header.setOpaque(false);
         header.setBorder(new EmptyBorder(14, 20, 8, 20));
 
-        JLabel brand = new JLabel("R-CONNECT " + (isVideoMode ? "VIDEO" : "VOICE"));
-        brand.setFont(Theme.font(Font.BOLD, 12));
-        brand.setForeground(Theme.PRIMARY);
+        brandLabel = new JLabel("R-CONNECT " + (isVideoMode ? "VIDEO" : "VOICE"));
+        brandLabel.setFont(Theme.font(Font.BOLD, 12));
+        brandLabel.setForeground(Theme.PRIMARY);
 
         JLabel p2pBadge = new JLabel("P2P · UDP");
         p2pBadge.setFont(Theme.font(Font.PLAIN, 11));
@@ -115,7 +123,7 @@ public final class CallWindow extends JFrame {
                 new EmptyBorder(2, 6, 2, 6)
         ));
 
-        header.add(brand, BorderLayout.WEST);
+        header.add(brandLabel, BorderLayout.WEST);
         header.add(p2pBadge, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
@@ -157,7 +165,7 @@ public final class CallWindow extends JFrame {
                 g2.setStroke(new BasicStroke(2.0f));
                 g2.draw(new Ellipse2D.Float(x, y, size, size));
 
-                String initial = targetDisplayName.isEmpty() ? "R" : targetDisplayName.substring(0, 1).toUpperCase();
+                String initial = CallWindow.this.targetDisplayName.isEmpty() ? "R" : CallWindow.this.targetDisplayName.substring(0, 1).toUpperCase();
                 g2.setFont(Theme.font(Font.BOLD, 36));
                 g2.setColor(Theme.PRIMARY);
                 FontMetrics fm = g2.getFontMetrics();
@@ -177,7 +185,7 @@ public final class CallWindow extends JFrame {
         nameLabel.setForeground(Theme.TEXT);
         nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        statusLabel = new JLabel(isCaller ? "Đang gọi..." : "Cuộc gọi đến...");
+        statusLabel = new JLabel(isCaller ? tr("Đang gọi...", "Calling...") : tr("Cuộc gọi đến...", "Incoming call..."));
         statusLabel.setFont(Theme.font(Font.PLAIN, 13));
         statusLabel.setForeground(Theme.TEXT_SECONDARY);
         statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -216,7 +224,7 @@ public final class CallWindow extends JFrame {
         voiceCard.add(Box.createVerticalStrut(16));
         voiceCard.add(visualizerPanel);
 
-        // 2. Video View Card (Robust layout with automatic PiP positioning)
+        // 2. Video View Card
         JPanel videoCard = new JPanel(new BorderLayout());
         videoCard.setOpaque(false);
         videoCard.setBorder(new EmptyBorder(8, 16, 8, 16));
@@ -251,7 +259,7 @@ public final class CallWindow extends JFrame {
                     g2.setColor(Theme.BORDER);
                     g2.drawOval(x, y, size, size);
 
-                    String init = targetDisplayName.isEmpty() ? "R" : targetDisplayName.substring(0, 1).toUpperCase();
+                    String init = CallWindow.this.targetDisplayName.isEmpty() ? "R" : CallWindow.this.targetDisplayName.substring(0, 1).toUpperCase();
                     g2.setFont(Theme.font(Font.BOLD, 32));
                     g2.setColor(Theme.PRIMARY);
                     FontMetrics fm = g2.getFontMetrics();
@@ -259,7 +267,9 @@ public final class CallWindow extends JFrame {
 
                     g2.setFont(Theme.font(Font.PLAIN, 13));
                     g2.setColor(Theme.TEXT_SECONDARY);
-                    String msg = (state == State.CONNECTED) ? "Đối phương chưa bật camera" : "Đang kết nối...";
+                    String msg = (state == State.CONNECTED)
+                            ? tr("Đối phương chưa bật camera", "Peer camera is off")
+                            : tr("Đang kết nối...", "Connecting...");
                     fm = g2.getFontMetrics();
                     g2.drawString(msg, (w - fm.stringWidth(msg)) / 2, y + size + 28);
                 }
@@ -268,7 +278,6 @@ public final class CallWindow extends JFrame {
         };
         videoViewport.setBackground(new Color(0x0A, 0x0C, 0x10));
 
-        // Picture-in-Picture Local Video Preview (always displays local camera/screen)
         pipPreview = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
@@ -281,14 +290,14 @@ public final class CallWindow extends JFrame {
                 g2.setColor(new Color(0x16, 0x1B, 0x22));
                 g2.fillRoundRect(0, 0, w, h, 12, 12);
 
-                if (localVideoImage != null && (videoStreamer == null || videoStreamer.isVideoEnabled())) {
+                if (localVideoImage != null && videoStreamer != null && videoStreamer.isVideoEnabled()) {
                     g2.setClip(new RoundRectangle2D.Float(0, 0, w, h, 12, 12));
                     g2.drawImage(localVideoImage, 0, 0, w, h, null);
                     g2.setClip(null);
                 } else {
                     g2.setFont(Theme.font(Font.PLAIN, 11));
                     g2.setColor(Theme.MUTED);
-                    String text = "Camera tắt";
+                    String text = tr("Camera tắt", "Camera off");
                     FontMetrics fm = g2.getFontMetrics();
                     g2.drawString(text, (w - fm.stringWidth(text)) / 2, (h + fm.getAscent()) / 2 - 2);
                 }
@@ -301,7 +310,6 @@ public final class CallWindow extends JFrame {
         };
         pipPreview.setOpaque(false);
 
-        // JLayeredPane with deterministic doLayout
         JLayeredPane layeredVideo = new JLayeredPane() {
             @Override
             public void doLayout() {
@@ -344,6 +352,27 @@ public final class CallWindow extends JFrame {
         });
         visualizerTimer.start();
 
+        // 45-second ringing timeout so unanswered calls never ring forever
+        ringingTimeoutTimer = new javax.swing.Timer(45_000, e -> {
+            if (state == State.OUTGOING_RINGING || state == State.INCOMING_RINGING) {
+                if (isCaller) {
+                    try {
+                        app.query("CALL_SIGNAL", Map.of(
+                                "action", "HANGUP",
+                                "targetUserId", targetUserId,
+                                "conversationId", conversationId,
+                                "callId", this.callId
+                        ), res -> {});
+                    } catch (Exception ignored) {}
+                    onCallEnded(tr("Không có phản hồi từ người nhận", "No answer"));
+                } else {
+                    onCallEnded(tr("Cuộc gọi nhỡ", "Missed call"));
+                }
+            }
+        });
+        ringingTimeoutTimer.setRepeats(false);
+        ringingTimeoutTimer.start();
+
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -356,47 +385,44 @@ public final class CallWindow extends JFrame {
         controlBar.removeAll();
 
         if (state == State.INCOMING_RINGING) {
-            JButton decline = roundButton(new Color(0xDA, 0x36, 0x33), new AppIcon(AppIcon.Type.CALL_END, Color.WHITE, 22), "Từ chối");
+            JButton decline = roundButton(new Color(0xDA, 0x36, 0x33), new AppIcon(AppIcon.Type.CALL_END, Color.WHITE, 22), tr("Từ chối", "Decline"));
             decline.addActionListener(e -> declineCall());
 
-            acceptButton = roundButton(new Color(0x23, 0x86, 0x36), new AppIcon(isVideoMode ? AppIcon.Type.VIDEO : AppIcon.Type.CALL, Color.WHITE, 22), "Trả lời");
+            acceptButton = roundButton(new Color(0x23, 0x86, 0x36), new AppIcon(isVideoMode ? AppIcon.Type.VIDEO : AppIcon.Type.CALL, Color.WHITE, 22), tr("Trả lời", "Answer"));
             acceptButton.addActionListener(e -> acceptCall());
 
             controlBar.add(decline);
             controlBar.add(acceptButton);
         } else {
-            // 1. Mute Mic button
             boolean isMuted = voiceStreamer != null && voiceStreamer.isMuted();
             muteButton = roundButton(
                     isMuted ? new Color(0x49, 0x1E, 0x22) : Theme.SURFACE,
                     new AppIcon(isMuted ? AppIcon.Type.MIC_OFF : AppIcon.Type.MIC, isMuted ? Theme.DANGER : Theme.TEXT, 20),
-                    isMuted ? "Bật mic" : "Tắt mic"
+                    isMuted ? tr("Bật mic", "Unmute") : tr("Tắt mic", "Mute")
             );
             muteButton.setBorder(new LineBorder(isMuted ? Theme.DANGER : Theme.BORDER, 1, true));
             muteButton.addActionListener(e -> toggleMute());
 
-            // 2. Camera Toggle button
-            boolean isCamOff = videoStreamer != null && !videoStreamer.isVideoEnabled();
+            boolean isCamOff = videoStreamer == null || !videoStreamer.isVideoEnabled();
             videoButton = roundButton(
                     isCamOff ? new Color(0x49, 0x1E, 0x22) : (isVideoMode ? new Color(0x1B, 0x27, 0x3E) : Theme.SURFACE),
                     new AppIcon(isCamOff ? AppIcon.Type.VIDEO_OFF : AppIcon.Type.VIDEO, isCamOff ? Theme.DANGER : (isVideoMode ? Theme.PRIMARY : Theme.TEXT), 20),
-                    isCamOff ? "Bật camera" : "Tắt camera"
+                    isCamOff ? tr("Bật camera", "Turn on camera") : tr("Tắt camera", "Turn off camera")
             );
             videoButton.setBorder(new LineBorder(isCamOff ? Theme.DANGER : (isVideoMode ? Theme.PRIMARY : Theme.BORDER), 1, true));
             videoButton.addActionListener(e -> toggleCamera());
 
-            // 3. Screen Share button
-            boolean isScreenSharing = videoStreamer != null && videoStreamer.getSourceMode() == VideoCallStreamer.SourceMode.SCREEN_SHARE;
+            boolean isScreenSharing = videoStreamer != null && videoStreamer.isVideoEnabled()
+                    && videoStreamer.getSourceMode() == VideoCallStreamer.SourceMode.SCREEN_SHARE;
             screenShareButton = roundButton(
                     isScreenSharing ? new Color(0x18, 0x36, 0x28) : Theme.SURFACE,
                     new AppIcon(AppIcon.Type.SCREEN, isScreenSharing ? Theme.SUCCESS : Theme.TEXT, 20),
-                    isScreenSharing ? "Dừng chia sẻ màn hình" : "Chia sẻ màn hình"
+                    isScreenSharing ? tr("Dừng chia sẻ màn hình", "Stop screen share") : tr("Chia sẻ màn hình", "Share screen")
             );
             screenShareButton.setBorder(new LineBorder(isScreenSharing ? Theme.SUCCESS : Theme.BORDER, 1, true));
             screenShareButton.addActionListener(e -> toggleScreenShare());
 
-            // 4. End Call button
-            endCallButton = roundButton(new Color(0xDA, 0x36, 0x33), new AppIcon(AppIcon.Type.CALL_END, Color.WHITE, 22), "Kết thúc");
+            endCallButton = roundButton(new Color(0xDA, 0x36, 0x33), new AppIcon(AppIcon.Type.CALL_END, Color.WHITE, 22), tr("Kết thúc", "End call"));
             endCallButton.addActionListener(e -> hangup());
 
             controlBar.add(muteButton);
@@ -438,9 +464,12 @@ public final class CallWindow extends JFrame {
 
         try {
             window.voiceStreamer = new VoiceCallStreamer();
-            window.videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")));
+            // Respect voice-only privacy: webcam stays disabled unless isVideo == true
+            window.videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")), isVideo);
             window.initVideoStreamerListeners();
-            window.videoStreamer.startPreview(); // local camera preview starts immediately
+            if (isVideo) {
+                window.videoStreamer.startPreview();
+            }
 
             int audioPort = window.voiceStreamer.getLocalPort();
             int videoPort = window.videoStreamer.getLocalPort();
@@ -456,14 +485,14 @@ public final class CallWindow extends JFrame {
                     "callId", callId
             ), res -> {
                 if (Boolean.FALSE.equals(res.get("delivered"))) {
-                    window.onCallRejected("Người dùng hiện không trực tuyến");
+                    window.onCallRejected(window.tr("Người dùng hiện không trực tuyến", "User is currently offline"));
                 } else {
-                    window.statusLabel.setText("Đang đổ chuông...");
+                    window.statusLabel.setText(window.tr("Đang đổ chuông...", "Ringing..."));
                     window.startRingtone(false);
                 }
             });
         } catch (Exception ex) {
-            window.onCallEnded("Không thể mở thiết bị mạng UDP");
+            window.onCallEnded(window.tr("Không thể mở thiết bị mạng UDP", "Failed to open UDP media socket"));
         }
 
         return window;
@@ -476,7 +505,7 @@ public final class CallWindow extends JFrame {
         window.remoteVideoPort = callerVideoPort;
 
         try {
-            window.videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")));
+            window.videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")), isVideo);
             window.initVideoStreamerListeners();
             if (isVideo) {
                 window.videoStreamer.startPreview();
@@ -497,18 +526,32 @@ public final class CallWindow extends JFrame {
         }));
         videoStreamer.onRemoteFrame(frame -> SwingUtilities.invokeLater(() -> {
             this.remoteVideoImage = frame;
+            if (frame != null && !isVideoMode && state == State.CONNECTED) {
+                setVideoMode(true);
+            }
             if (videoViewport != null) videoViewport.repaint();
         }));
     }
 
+    public void onPeerVideoModeChanged(boolean peerVideoActive) {
+        if (peerVideoActive && !isVideoMode && state == State.CONNECTED) {
+            setVideoMode(true);
+        }
+        if (!peerVideoActive) {
+            remoteVideoImage = null;
+            if (videoViewport != null) videoViewport.repaint();
+        }
+    }
+
     public void onAcceptedByPeer(String remoteHost, int remoteAudioPort, int remoteVideoPort) {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         stopRingtone();
         this.remoteHost = remoteHost;
         this.remoteAudioPort = remoteAudioPort;
         this.remoteVideoPort = remoteVideoPort;
         this.state = State.CONNECTED;
         this.callStartTime = System.currentTimeMillis();
-        statusLabel.setText("00:00 · Đang đàm thoại P2P (UDP)");
+        statusLabel.setText("00:00 · " + tr("Đang đàm thoại P2P (UDP)", "Connected P2P (UDP)"));
         avatarPanel.repaint();
         buildControls();
         durationTimer.start();
@@ -519,23 +562,24 @@ public final class CallWindow extends JFrame {
             voiceStreamer.start(addr, remoteAudioPort);
 
             if (videoStreamer == null) {
-                videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")));
+                videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")), isVideoMode);
                 initVideoStreamerListeners();
             }
             if (remoteVideoPort > 0) {
                 videoStreamer.start(addr, remoteVideoPort);
             }
         } catch (Exception ex) {
-            statusLabel.setText("Lỗi kết nối âm thanh/hình ảnh UDP");
+            statusLabel.setText(tr("Lỗi kết nối âm thanh/hình ảnh UDP", "UDP media connection error"));
         }
     }
 
     private void acceptCall() {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         stopRingtone();
         try {
             if (this.voiceStreamer == null) this.voiceStreamer = new VoiceCallStreamer();
             if (this.videoStreamer == null) {
-                this.videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")));
+                this.videoStreamer = new VideoCallStreamer(String.valueOf(app.currentUser.getOrDefault("displayName", "Tôi")), isVideoMode);
                 initVideoStreamerListeners();
             }
 
@@ -553,7 +597,7 @@ public final class CallWindow extends JFrame {
 
             this.state = State.CONNECTED;
             this.callStartTime = System.currentTimeMillis();
-            statusLabel.setText("00:00 · Đang đàm thoại P2P (UDP)");
+            statusLabel.setText("00:00 · " + tr("Đang đàm thoại P2P (UDP)", "Connected P2P (UDP)"));
             avatarPanel.repaint();
             buildControls();
             durationTimer.start();
@@ -566,8 +610,21 @@ public final class CallWindow extends JFrame {
                 }
             }
         } catch (Exception ex) {
-            onCallEnded("Không thể mở thiết bị kết nối UDP");
+            onCallEnded(tr("Không thể mở thiết bị kết nối UDP", "Failed to open UDP audio/video device"));
         }
+    }
+
+    private void notifyPeerVideoState(boolean enabled) {
+        if (state != State.CONNECTED || app == null) return;
+        try {
+            app.query("CALL_SIGNAL", Map.of(
+                    "action", "VIDEO_MODE",
+                    "targetUserId", targetUserId,
+                    "conversationId", conversationId,
+                    "callId", callId,
+                    "enabled", enabled
+            ), res -> {});
+        } catch (Exception ignored) {}
     }
 
     private void toggleCamera() {
@@ -581,6 +638,7 @@ public final class CallWindow extends JFrame {
                 videoStreamer.setSourceMode(VideoCallStreamer.SourceMode.CAMERA);
             }
             videoStreamer.startPreview();
+            notifyPeerVideoState(next);
             buildControls();
             if (pipPreview != null) pipPreview.repaint();
         }
@@ -591,13 +649,17 @@ public final class CallWindow extends JFrame {
             setVideoMode(true);
         }
         if (videoStreamer != null) {
-            if (videoStreamer.getSourceMode() == VideoCallStreamer.SourceMode.SCREEN_SHARE) {
+            boolean sharingNow;
+            if (videoStreamer.isVideoEnabled() && videoStreamer.getSourceMode() == VideoCallStreamer.SourceMode.SCREEN_SHARE) {
                 videoStreamer.setSourceMode(VideoCallStreamer.SourceMode.CAMERA);
+                sharingNow = true;
             } else {
                 videoStreamer.setSourceMode(VideoCallStreamer.SourceMode.SCREEN_SHARE);
                 videoStreamer.setVideoEnabled(true);
+                sharingNow = true;
             }
             videoStreamer.startPreview();
+            notifyPeerVideoState(sharingNow);
             buildControls();
             if (pipPreview != null) pipPreview.repaint();
         }
@@ -605,16 +667,18 @@ public final class CallWindow extends JFrame {
 
     public void setVideoMode(boolean video) {
         this.isVideoMode = video;
+        brandLabel.setText("R-CONNECT " + (video ? "VIDEO" : "VOICE"));
         centerCards.show(centerContainer, video ? "VIDEO" : "VOICE");
         if (video) {
             setSize(Math.max(680, getWidth()), Math.max(520, getHeight()));
         } else {
-            setSize(360, 480);
+            setSize(380, 480);
         }
         buildControls();
     }
 
     private void declineCall() {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         stopRingtone();
         try {
             app.query("CALL_SIGNAL", Map.of(
@@ -624,12 +688,13 @@ public final class CallWindow extends JFrame {
                     "callId", callId
             ), res -> {});
         } catch (Exception ignored) {}
-        onCallEnded("Đã từ chối cuộc gọi");
+        onCallEnded(tr("Đã từ chối cuộc gọi", "Call declined"));
     }
 
     public void onCallRejected(String reason) {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         stopRingtone();
-        statusLabel.setText(reason == null ? "Người dùng từ chối cuộc gọi" : reason);
+        statusLabel.setText(reason == null ? tr("Người dùng từ chối cuộc gọi", "Call declined") : reason);
         state = State.ENDED;
         avatarPanel.repaint();
         cleanup();
@@ -637,6 +702,7 @@ public final class CallWindow extends JFrame {
     }
 
     public void hangup() {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         stopRingtone();
         if (state != State.ENDED) {
             try {
@@ -648,13 +714,14 @@ public final class CallWindow extends JFrame {
                 ), res -> {});
             } catch (Exception ignored) {}
         }
-        onCallEnded("Cuộc gọi đã kết thúc");
+        onCallEnded(tr("Cuộc gọi đã kết thúc", "Call ended"));
     }
 
     public void onCallEnded(String reason) {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         stopRingtone();
         state = State.ENDED;
-        statusLabel.setText(reason == null ? "Cuộc gọi đã kết thúc" : reason);
+        statusLabel.setText(reason == null ? tr("Cuộc gọi đã kết thúc", "Call ended") : reason);
         avatarPanel.repaint();
         cleanup();
         closeDelayed(1500);
@@ -673,11 +740,12 @@ public final class CallWindow extends JFrame {
             long sec = (System.currentTimeMillis() - callStartTime) / 1000;
             long m = sec / 60;
             long s = sec % 60;
-            statusLabel.setText(String.format("%02d:%02d · Đang đàm thoại P2P (UDP)", m, s));
+            statusLabel.setText(String.format("%02d:%02d · %s", m, s, tr("Đang đàm thoại P2P (UDP)", "Connected P2P (UDP)")));
         }
     }
 
     private void cleanup() {
+        if (ringingTimeoutTimer != null) ringingTimeoutTimer.stop();
         if (durationTimer != null) durationTimer.stop();
         if (visualizerTimer != null) visualizerTimer.stop();
         if (voiceStreamer != null) {

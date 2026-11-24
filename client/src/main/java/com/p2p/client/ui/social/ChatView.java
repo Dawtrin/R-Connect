@@ -2,12 +2,8 @@ package com.p2p.client.ui.social;
 
 import com.p2p.client.network.social.*;
 import com.p2p.client.ui.AppIcon;
-import com.p2p.client.ui.Brand;
-import com.p2p.client.ui.Dialogs;
 import com.p2p.client.ui.ModernUI;
-import com.p2p.client.ui.NavItem;
 import com.p2p.client.ui.Theme;
-import com.p2p.common.social.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
@@ -15,32 +11,47 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.function.*;
-import java.util.prefs.Preferences;
 import static com.p2p.client.ui.social.Values.*;
-import com.p2p.client.ui.social.SocialWindow.Page;
 
-/** ChatView screen. Extracted from SocialWindow; behaviour is unchanged. */
+/** ChatView screen: direct & group chat, UDP typing indicator, voice clips, image previews & smart translation. */
 final class ChatView extends ViewSupport {
     private final AudioRecorder audioRecorder = new AudioRecorder();
     private final Map<String, Path> voiceCache = new ConcurrentHashMap<>();
     private javax.swing.Timer recordTimer;
     private int recordSeconds = 0;
+    private final javax.swing.Timer translationRenderTimer;
 
-    ChatView(SocialWindow app) { super(app); }
+    ChatView(SocialWindow app) {
+        super(app);
+        translationRenderTimer = new javax.swing.Timer(60, e -> {
+            if (app.activeConversation > 0 && app.chatMessages != null) {
+                renderMessages(false);
+            }
+        });
+        translationRenderTimer.setRepeats(false);
+    }
+
+    void stopRecordingIfActive() {
+        if (recordTimer != null) {
+            recordTimer.stop();
+            recordTimer = null;
+        }
+        recordSeconds = 0;
+        if (audioRecorder.isRecording()) {
+            audioRecorder.cancel();
+        }
+    }
 
     void openDirect(long target) {
         mutate("CONVERSATION_DIRECT_GET_OR_CREATE", of("targetUserId", target), null, r -> {
             Map<String, Object> conv = map(r.get("conversation"));
             if (conv.isEmpty()) conv = new LinkedHashMap<>(r);
-            conv.putIfAbsent("title", "Trò chuyện với người dùng #" + target);
+            conv.putIfAbsent("title", tr("Trò chuyện với người dùng #", "Chat with user #") + target);
             conv.putIfAbsent("kind", "DIRECT");
             conv.putIfAbsent("otherUserId", target);
             openChat(conv);
@@ -50,26 +61,35 @@ final class ChatView extends ViewSupport {
     void openChat(Map<String, Object> conv) {
         long cid = id(conv, "conversation");
         if (cid == 0) {
-            showError(new IllegalArgumentException("Máy chủ chưa trả mã conversationId"));
+            showError(new IllegalArgumentException(tr("Máy chủ chưa trả mã conversationId", "Server did not return conversationId")));
             return;
         }
+        stopRecordingIfActive();
 
         boolean isGroup = "GROUP".equals(str(conv, "type", "kind"));
+        boolean isOwner = isGroup && (num(conv, "ownerId") == id(app.currentUser, "user") || "OWNER".equals(str(conv, "role")));
         JPanel panel = new JPanel(new BorderLayout(8, 8));
         panel.setOpaque(false);
 
         // Header
         List<Component> headerActions = new ArrayList<>();
-        headerActions.add(ghost("Tin cũ hơn", () -> loadHistory(true)));
-        if (isGroup) headerActions.add(button("Thành viên", new AppIcon(AppIcon.Type.PEOPLE, Theme.TEXT, 15), () -> groupInfo(conv)));
-        headerActions.add(ghost("Tệp đang tải", () -> app.media.resumeUploads(app)));
+        headerActions.add(ghost(tr("Tin cũ hơn", "Older messages"), () -> loadHistory(true)));
+        if (isGroup) {
+            if (isOwner) {
+                headerActions.add(button(tr("Mời bạn", "Invite"), new AppIcon(AppIcon.Type.PLUS, Theme.PRIMARY, 14), () ->
+                        selectFriend(uid -> mutate("GROUP_INVITE", of("conversationId", cid, "targetUserId", uid), null,
+                                r -> info(tr("Đã gửi lời mời tham gia nhóm.", "Group invitation sent."))))));
+            }
+            headerActions.add(button(tr("Thành viên", "Members"), new AppIcon(AppIcon.Type.PEOPLE, Theme.TEXT, 15), () -> groupInfo(conv)));
+        }
+        headerActions.add(ghost(tr("Tệp đang tải", "Transfers"), () -> app.media.resumeUploads(app)));
         if (!isGroup) {
-            JButton voiceCallBtn = ghost("Gọi thoại", () -> app.startCallWithCurrentPeer(false));
+            JButton voiceCallBtn = ghost(tr("Gọi thoại", "Voice call"), () -> app.startCallWithCurrentPeer(false));
             voiceCallBtn.setIcon(new AppIcon(AppIcon.Type.CALL, Theme.TEXT_SECONDARY, 15));
             voiceCallBtn.setIconTextGap(6);
             headerActions.add(voiceCallBtn);
 
-            JButton videoCallBtn = ghost("Gọi video", () -> app.startCallWithCurrentPeer(true));
+            JButton videoCallBtn = ghost(tr("Gọi video", "Video call"), () -> app.startCallWithCurrentPeer(true));
             videoCallBtn.setIcon(new AppIcon(AppIcon.Type.VIDEO, Theme.PRIMARY, 15));
             videoCallBtn.setIconTextGap(6);
             headerActions.add(videoCallBtn);
@@ -80,9 +100,13 @@ final class ChatView extends ViewSupport {
         // Subheader badges
         JPanel subheader = new JPanel(new BorderLayout());
         subheader.setOpaque(false);
+        long memberCount = num(conv, "memberCount");
+        String groupChipText = memberCount > 0
+                ? tr("NHÓM · " + memberCount + " THÀNH VIÊN", "GROUP · " + memberCount + " MEMBERS")
+                : tr("GỬI CHO CẢ NHÓM", "GROUP CHAT");
         JLabel badgeMode = isGroup
-                ? ModernUI.chip("GỬI CHO CẢ NHÓM", ModernUI.Tone.SUCCESS)
-                : ModernUI.chip("TIN NHẮN RIÊNG", ModernUI.Tone.ACCENT);
+                ? ModernUI.chip(groupChipText, ModernUI.Tone.SUCCESS)
+                : ModernUI.chip(tr("TIN NHẮN RIÊNG", "DIRECT CHAT"), ModernUI.Tone.ACCENT);
         app.typingLabel = label(" ", false);
         app.typingLabel.setFont(Theme.font(Font.ITALIC, 12));
         app.typingLabel.setForeground(Theme.INFO);
@@ -102,12 +126,24 @@ final class ChatView extends ViewSupport {
         panel.add(app.chatScroll, BorderLayout.CENTER);
 
         app.chatInput = text("", 3);
-        JButton send = Theme.primaryButton("Gửi");
+        // Wire live UDP typing indicator as the user types
+        app.chatInput.getDocument().addDocumentListener(new DocumentListener() {
+            private void emitTyping() {
+                if (app.authenticated && app.udp != null && app.activeConversation == cid && app.chatInput.isEnabled()) {
+                    app.udp.typing(cid, !app.chatInput.getText().isBlank());
+                }
+            }
+            @Override public void insertUpdate(DocumentEvent e) { emitTyping(); }
+            @Override public void removeUpdate(DocumentEvent e) { emitTyping(); }
+            @Override public void changedUpdate(DocumentEvent e) { emitTyping(); }
+        });
+
+        JButton send = Theme.primaryButton(tr("Gửi", "Send"));
         send.setIcon(new AppIcon(AppIcon.Type.SEND, Theme.ON_PRIMARY, 15));
         send.setIconTextGap(8);
         send.addActionListener(e -> sendMessage(cid, null, app.chatInput.getText()));
 
-        JButton attach = ghost("Đính kèm", () -> {
+        JButton attach = ghost(tr("Đính kèm", "Attach"), () -> {
             JFileChooser c = new JFileChooser();
             if (c.showOpenDialog(app) != JFileChooser.APPROVE_OPTION) return;
             String caption = app.chatInput.getText();
@@ -117,7 +153,7 @@ final class ChatView extends ViewSupport {
         attach.setIcon(new AppIcon(AppIcon.Type.ATTACHMENT, Theme.TEXT_SECONDARY, 15));
         attach.setIconTextGap(8);
 
-        JButton emoji = ghost("Biểu cảm", null);
+        JButton emoji = ghost(tr("Biểu cảm", "Emoji"), null);
         emoji.setIcon(new AppIcon(AppIcon.Type.SMILE, Theme.TEXT_SECONDARY, 15));
         emoji.setIconTextGap(8);
         emoji.addActionListener(e -> EmojiPicker.show(emoji, text -> {
@@ -135,21 +171,20 @@ final class ChatView extends ViewSupport {
             app.chatInput.requestFocusInWindow();
         }));
 
-        JButton voice = ghost("Ghi âm", null);
+        String voiceIdleLabel = tr("Ghi âm", "Voice clip");
+        JButton voice = ghost(voiceIdleLabel, null);
         voice.setIcon(new AppIcon(AppIcon.Type.MIC, Theme.TEXT_SECONDARY, 15));
         voice.setIconTextGap(8);
 
-        JButton cancelVoice = ghost("Hủy", null);
+        JButton cancelVoice = ghost(tr("Hủy", "Cancel"), null);
         cancelVoice.setIcon(new AppIcon(AppIcon.Type.CLOSE, Theme.TEXT_SECONDARY, 13));
         cancelVoice.setIconTextGap(6);
         cancelVoice.setVisible(false);
 
         cancelVoice.addActionListener(e -> {
             if (audioRecorder.isRecording()) {
-                audioRecorder.cancel();
-                if (recordTimer != null) recordTimer.stop();
-                recordSeconds = 0;
-                voice.setText("Ghi âm");
+                stopRecordingIfActive();
+                voice.setText(voiceIdleLabel);
                 voice.setIcon(new AppIcon(AppIcon.Type.MIC, Theme.TEXT_SECONDARY, 15));
                 voice.setForeground(Theme.TEXT_SECONDARY);
                 cancelVoice.setVisible(false);
@@ -161,7 +196,8 @@ final class ChatView extends ViewSupport {
                 try {
                     audioRecorder.start();
                     recordSeconds = 0;
-                    voice.setText("00:00 · Dừng");
+                    String stopLabel = tr("Dừng", "Stop");
+                    voice.setText("00:00 · " + stopLabel);
                     voice.setIcon(new AppIcon(AppIcon.Type.STOP, Theme.DANGER, 15));
                     voice.setForeground(Theme.DANGER);
                     cancelVoice.setVisible(true);
@@ -171,25 +207,27 @@ final class ChatView extends ViewSupport {
                         recordSeconds++;
                         int m = recordSeconds / 60;
                         int s = recordSeconds % 60;
-                        voice.setText(String.format("%02d:%02d · Dừng", m, s));
+                        voice.setText(String.format("%02d:%02d · %s", m, s, stopLabel));
                         if (recordSeconds >= 300) {
                             voice.doClick();
                         }
                     });
                     recordTimer.start();
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(app, "Không thể bắt đầu thu âm: " + ex.getMessage(), "Lỗi Microphone", JOptionPane.WARNING_MESSAGE);
+                    JOptionPane.showMessageDialog(app,
+                            tr("Không thể bắt đầu thu âm: ", "Cannot start microphone recording: ") + ex.getMessage(),
+                            tr("Lỗi Microphone", "Microphone Error"), JOptionPane.WARNING_MESSAGE);
                 }
             } else {
                 if (recordTimer != null) recordTimer.stop();
-                voice.setText("Ghi âm");
+                voice.setText(voiceIdleLabel);
                 voice.setIcon(new AppIcon(AppIcon.Type.MIC, Theme.TEXT_SECONDARY, 15));
                 voice.setForeground(Theme.TEXT_SECONDARY);
                 cancelVoice.setVisible(false);
                 try {
                     AudioRecorder.RecordResult res = audioRecorder.stop();
                     if (res != null && res.file().exists() && res.file().length() > 0) {
-                        String caption = "Tin nhắn thoại (" + res.durationSeconds() + "s)";
+                        String caption = tr("Tin nhắn thoại (", "Voice message (") + res.durationSeconds() + "s)";
                         app.media.upload(app, res.file().toPath(), "CHAT_FILE", mid -> sendMessage(cid, mid, caption));
                     }
                 } catch (Exception ex) {
@@ -204,7 +242,8 @@ final class ChatView extends ViewSupport {
         });
         app.chatInput.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK), "insert-break");
 
-        app.chatInput.putClientProperty("JTextField.placeholderText", "Nhập tin nhắn · Enter để gửi, Shift+Enter xuống dòng");
+        app.chatInput.putClientProperty("JTextField.placeholderText",
+                tr("Nhập tin nhắn · Enter để gửi, Shift+Enter xuống dòng", "Type a message · Enter to send, Shift+Enter for new line"));
         JPanel composerInner = new JPanel(new BorderLayout(0, 8));
         composerInner.setOpaque(false);
         composerInner.setBorder(new EmptyBorder(12, 24, 14, 24));
@@ -234,7 +273,17 @@ final class ChatView extends ViewSupport {
             attach.setEnabled(false);
             emoji.setEnabled(false);
             voice.setEnabled(false);
-            app.typingLabel.setText("Chỉ đọc lịch sử · Bạn không còn quyền gửi tin mới trong nhóm này");
+            String denyReason = str(conv, "denyReason");
+            if (isGroup && ("NEED_MEMBERS".equals(denyReason) || num(conv, "memberCount") <= 1)) {
+                app.typingLabel.setText(tr("Nhóm hiện mới có mình bạn · Hãy mời thêm bạn bè hoặc chờ người tham gia để bắt đầu nhắn tin",
+                        "You are the only member · Invite friends or wait for someone to join to start chatting"));
+            } else if (!isGroup) {
+                app.typingLabel.setText(tr("Chỉ đọc lịch sử · Không thể gửi tin nhắn mới do đã chặn hoặc tài khoản bị khóa",
+                        "Read-only history · Cannot send new messages due to block or account status"));
+            } else {
+                app.typingLabel.setText(tr("Chỉ đọc lịch sử · Bạn không còn quyền gửi tin mới trong nhóm này",
+                        "Read-only history · You can no longer send new messages in this group"));
+            }
         }
         panel.add(composer, BorderLayout.SOUTH);
 
@@ -316,7 +365,7 @@ final class ChatView extends ViewSupport {
 
     void requestTranslation(Map<String, Object> message) {
         String key = translationKey(message);
-        if (key.isBlank() || app.translationPending.contains(key) || app.translations.containsKey(key)) return;
+        if (key.isBlank() || app.translationPending.contains(key) || app.translations.containsKey(key) || app.translationFailed.contains(key)) return;
         String content = str(message, "content");
         if (content.isBlank()) return;
         SocialClient expected = app.client;
@@ -328,9 +377,17 @@ final class ChatView extends ViewSupport {
                 of("messageId", messageId, "targetLanguage", target), null), app.workers).whenComplete((result, error) -> invoke(() -> {
             app.translationPending.remove(key);
             if (app.client != expected || !app.authenticated) return;
-            if (error == null) {
+            if (error == null && result != null) {
                 app.translations.put(key, new LinkedHashMap<>(result));
-                if (app.activeConversation > 0) renderMessages(false);
+                if (app.activeConversation > 0) {
+                    translationRenderTimer.restart();
+                }
+            } else {
+                // Record failure for this key so renderMessages never triggers an infinite retry storm
+                app.translationFailed.add(key);
+                if (app.activeConversation > 0) {
+                    translationRenderTimer.restart();
+                }
             }
         }));
     }
@@ -359,23 +416,25 @@ final class ChatView extends ViewSupport {
         panel.add(contentArea);
 
         if (!translation.isEmpty() && bool(translation, "translated")) {
-            JButton toggle = button(showOriginal ? "Xem bản dịch" : "Xem bản gốc", () -> {
+            String toggleText = showOriginal
+                    ? tr("Xem bản dịch", "View translation")
+                    : tr("Xem bản gốc", "View original");
+            JButton toggle = button(toggleText, () -> {
                 if (showOriginal) app.originalMessages.remove(key);
                 else app.originalMessages.add(key);
                 renderMessages(false);
             });
             toggle.setFont(Theme.font(Font.PLAIN, 11));
-            toggle.setMaximumSize(new Dimension(150, 26));
+            toggle.setMaximumSize(new Dimension(170, 26));
             toggle.setAlignmentX(Component.LEFT_ALIGNMENT);
             panel.add(Box.createVerticalStrut(3));
             panel.add(toggle);
         } else if (app.translationPending.contains(key)) {
-            JLabel pending = label("Đang dịch…", false);
+            JLabel pending = label(tr("Đang dịch…", "Translating…"), false);
             pending.setFont(Theme.font(Font.PLAIN, 11));
             pending.setAlignmentX(Component.LEFT_ALIGNMENT);
             panel.add(pending);
-            requestTranslation(message);
-        } else if (!key.isBlank()) {
+        } else if (!key.isBlank() && !app.translationFailed.contains(key)) {
             requestTranslation(message);
         }
         return panel;
@@ -397,20 +456,17 @@ final class ChatView extends ViewSupport {
         for (Map<String, Object> m : sorted) {
             boolean isOwn = num(m, "senderId") == id(app.currentUser, "user");
 
-            // Row wrapper spanning full container width
             JPanel row = new JPanel(new BorderLayout());
             row.setOpaque(false);
             row.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-            // Bubble container (staggered right for own, left for other)
             JPanel bubbleWrapper = new JPanel();
             bubbleWrapper.setLayout(new BoxLayout(bubbleWrapper, BoxLayout.Y_AXIS));
             bubbleWrapper.setOpaque(false);
 
-            // Sender name on top of received bubble in Group chat
             if (!isOwn && isGroup) {
                 String sender = str(m, "senderName", "displayName");
-                if (sender.isBlank()) sender = "Thành viên #" + num(m, "senderId");
+                if (sender.isBlank()) sender = tr("Thành viên #", "Member #") + num(m, "senderId");
                 JLabel senderLbl = new JLabel(sender);
                 senderLbl.setFont(Theme.font(Font.BOLD, 12));
                 senderLbl.setForeground(Theme.PRIMARY_LIGHT);
@@ -419,17 +475,15 @@ final class ChatView extends ViewSupport {
                 bubbleWrapper.add(senderLbl);
             }
 
-            // Bubble card with distinct styling
             Color bubbleColor = isOwn ? Theme.BUBBLE_OWN : Theme.BUBBLE_OTHER;
             Theme.RoundedPanel bubbleBox = (Theme.RoundedPanel) Theme.roundedPanel(bubbleColor, 14);
             bubbleBox.setStroke(isOwn ? Theme.BUBBLE_OWN_BORDER : Theme.CARD_BORDER);
             bubbleBox.setLayout(new BoxLayout(bubbleBox, BoxLayout.Y_AXIS));
             bubbleBox.setBorder(new EmptyBorder(9, 13, 9, 13));
 
-            // Message text stays a JTextArea and adds a small original/translation toggle.
             bubbleBox.add(translatedMessage(m));
 
-            // Attachment download button
+            // Attachment preview (Image / Voice / File download)
             Map<String, Object> attachment = map(m.get("media"));
             if (attachment.isEmpty()) attachment = map(m.get("attachment"));
             String mid = str(m, "mediaId");
@@ -438,15 +492,30 @@ final class ChatView extends ViewSupport {
                 String mediaId = mid;
                 String fileName = str(attachment, "fileName", "originalName");
                 if (fileName.isBlank()) fileName = str(m, "fileName");
+                String mimeType = str(attachment, "mimeType", "mime_type").toLowerCase(Locale.ROOT);
+                String lowerName = fileName.toLowerCase(Locale.ROOT);
                 String suggestedName = fileName;
-                // Voice playback support
                 String contentStr = str(m, "content");
-                boolean isAudio = fileName.toLowerCase().endsWith(".wav")
-                        || fileName.toLowerCase().startsWith("rconnect_voice_")
-                        || contentStr.contains("Tin nhắn thoại");
 
-                if (isAudio) {
-                    JButton voicePlay = new JButton("Phát tin nhắn thoại");
+                boolean isImage = mimeType.startsWith("image/")
+                        || lowerName.endsWith(".png")
+                        || lowerName.endsWith(".jpg")
+                        || lowerName.endsWith(".jpeg");
+
+                boolean isAudio = lowerName.endsWith(".wav")
+                        || lowerName.startsWith("rconnect_voice_")
+                        || contentStr.contains("Tin nhắn thoại")
+                        || contentStr.contains("Voice message");
+
+                if (isImage) {
+                    JButton imgPreview = photo(mediaId, fileName);
+                    imgPreview.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    bubbleBox.add(Box.createVerticalStrut(6));
+                    bubbleBox.add(imgPreview);
+                } else if (isAudio) {
+                    String playText = tr("Phát tin nhắn thoại", "Play voice message");
+                    String pauseText = tr("Tạm dừng", "Pause");
+                    JButton voicePlay = new JButton(playText);
                     voicePlay.setFont(Theme.font(Font.BOLD, 12));
                     voicePlay.setForeground(Theme.PRIMARY);
                     voicePlay.setBackground(Theme.SURFACE);
@@ -460,10 +529,10 @@ final class ChatView extends ViewSupport {
                     Runnable updateState = () -> {
                         Path cached = voiceCache.get(mediaId);
                         if (cached != null && AudioPlayer.isPlaying(cached.toFile())) {
-                            voicePlay.setText("Tạm dừng");
+                            voicePlay.setText(pauseText);
                             voicePlay.setIcon(new AppIcon(AppIcon.Type.PAUSE, Theme.PRIMARY, 14));
                         } else {
-                            voicePlay.setText("Phát tin nhắn thoại");
+                            voicePlay.setText(playText);
                             voicePlay.setIcon(new AppIcon(AppIcon.Type.PLAY, Theme.PRIMARY, 14));
                         }
                     };
@@ -474,7 +543,7 @@ final class ChatView extends ViewSupport {
                             AudioPlayer.togglePlay(cached.toFile(), updateState);
                             updateState.run();
                         } else {
-                            voicePlay.setText("Đang tải...");
+                            voicePlay.setText(tr("Đang tải...", "Loading..."));
                             voicePlay.setEnabled(false);
                             app.media.fetchMedia(app, mediaId, ".wav", fetchedPath -> {
                                 voiceCache.put(mediaId, fetchedPath);
@@ -489,8 +558,9 @@ final class ChatView extends ViewSupport {
                     bubbleBox.add(voicePlay);
                 }
 
-                // Button text must retain fileName for unit test assertions
-                JButton dlBtn = button("Tải tệp · " + (fileName.isBlank() ? "#" + mid : fileName), () -> app.media.download(app, mediaId, suggestedName));
+                // Button text retains fileName for unit test assertions
+                JButton dlBtn = button(tr("Tải tệp · ", "Download · ") + (fileName.isBlank() ? "#" + mid : fileName),
+                        () -> app.media.download(app, mediaId, suggestedName));
                 dlBtn.setIcon(new AppIcon(AppIcon.Type.DOWNLOAD, Theme.TEXT, 14));
                 dlBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
                 bubbleBox.add(Box.createVerticalStrut(6));
@@ -500,9 +570,9 @@ final class ChatView extends ViewSupport {
             bubbleBox.setAlignmentX(isOwn ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
             bubbleWrapper.add(bubbleBox);
 
-            // Sub-label with timestamp and receipt status
             String receipt = isGroup
-                    ? "Đã lưu · " + num(m, "deliveredByCount") + " đã nhận / " + num(m, "readByCount") + " đã đọc"
+                    ? tr("Đã lưu · " + num(m, "deliveredByCount") + " đã nhận / " + num(m, "readByCount") + " đã đọc",
+                         "Saved · " + num(m, "deliveredByCount") + " delivered / " + num(m, "readByCount") + " read")
                     : messageStatus(str(m, "status"));
             String metaText = time(m) + (isOwn ? " · " + receipt : "");
             JLabel metaLabel = new JLabel(metaText);
@@ -513,14 +583,20 @@ final class ChatView extends ViewSupport {
             bubbleWrapper.add(metaLabel);
 
             if (isOwn) {
-                // Sent message: right aligned, staggered with left gap
                 row.add(bubbleWrapper, BorderLayout.EAST);
                 row.add(Box.createHorizontalStrut(32), BorderLayout.WEST);
             } else {
-                // Received message: left aligned with sender avatar, staggered with right gap
                 JPanel leftBox = new JPanel(new BorderLayout(8, 0));
                 leftBox.setOpaque(false);
-                Map<String, Object> senderMap = of("displayName", str(m, "senderName", "displayName"), "userId", num(m, "senderId"));
+                String senderAvatarId = str(m, "senderAvatarMediaId");
+                if (senderAvatarId.isBlank() && !isGroup) {
+                    senderAvatarId = str(app.activeConversationData, "avatarMediaId");
+                }
+                Map<String, Object> senderMap = of(
+                        "displayName", str(m, "senderName", "displayName"),
+                        "userId", num(m, "senderId"),
+                        "avatarMediaId", senderAvatarId
+                );
                 JComponent senderAvatar = avatar(senderMap, 30);
                 JPanel avatarAlign = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
                 avatarAlign.setOpaque(false);
@@ -538,7 +614,7 @@ final class ChatView extends ViewSupport {
             app.chatMessages.add(Box.createVerticalStrut(8));
         }
 
-        // Pending messages (right-aligned)
+        // Pending messages
         for (PendingMessage pending : app.pendingMessages.values()) {
             if (pending.conversationId == app.activeConversation) {
                 JPanel row = new JPanel(new BorderLayout());
@@ -559,8 +635,8 @@ final class ChatView extends ViewSupport {
                 contentArea.setAlignmentX(Component.LEFT_ALIGNMENT);
                 bubbleBox.add(contentArea);
 
-                if (!"Đang gửi...".equals(pending.status) && !"Đang gửi…".equals(pending.status)) {
-                    JButton retryBtn = primary("Thử lại cùng mã tin nhắn", new AppIcon(AppIcon.Type.REFRESH, Theme.ON_PRIMARY, 14), () -> retryMessage(pending));
+                if (!"Đang gửi...".equals(pending.status) && !"Đang gửi…".equals(pending.status) && !"Sending…".equals(pending.status)) {
+                    JButton retryBtn = primary(tr("Thử lại cùng mã tin nhắn", "Retry safely"), new AppIcon(AppIcon.Type.REFRESH, Theme.ON_PRIMARY, 14), () -> retryMessage(pending));
                     retryBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
                     bubbleBox.add(Box.createVerticalStrut(6));
                     bubbleBox.add(retryBtn);
@@ -569,7 +645,7 @@ final class ChatView extends ViewSupport {
                 bubbleBox.setAlignmentX(Component.RIGHT_ALIGNMENT);
                 bubbleWrapper.add(bubbleBox);
 
-                JLabel statusLabel = new JLabel("Bạn · " + pending.status);
+                JLabel statusLabel = new JLabel(tr("Bạn · ", "You · ") + pending.status);
                 statusLabel.setFont(Theme.font(Font.PLAIN, 11));
                 statusLabel.setForeground(Theme.WARNING);
                 statusLabel.setBorder(new EmptyBorder(2, 4, 0, 4));
@@ -586,7 +662,9 @@ final class ChatView extends ViewSupport {
         }
 
         if (app.chatMessages.getComponentCount() == 0) {
-            app.chatMessages.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.CHAT, Theme.MUTED, 36), "Chưa có tin nhắn nào", "Hãy gửi lời chào đầu tiên để bắt đầu cuộc trò chuyện!"));
+            app.chatMessages.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.CHAT, Theme.MUTED, 36),
+                    tr("Chưa có tin nhắn nào", "No messages yet"),
+                    tr("Hãy gửi lời chào đầu tiên để bắt đầu cuộc trò chuyện!", "Say hello to start the conversation!")));
         }
         app.chatMessages.revalidate();
         app.chatMessages.repaint();
@@ -599,25 +677,26 @@ final class ChatView extends ViewSupport {
 
     String messageStatus(String status) {
         return switch (status) {
-            case "READ" -> "Đã đọc";
-            case "DELIVERED" -> "Đã nhận";
-            case "STORED" -> "Đã lưu trên máy chủ";
-            default -> status.isBlank() ? "Đã lưu trên máy chủ" : status;
+            case "READ" -> tr("Đã đọc", "Read");
+            case "DELIVERED" -> tr("Đã nhận", "Delivered");
+            case "STORED" -> tr("Đã lưu trên máy chủ", "Stored on server");
+            default -> status.isBlank() ? tr("Đã lưu trên máy chủ", "Stored on server") : status;
         };
     }
 
     void sendMessage(long cid, String mediaId, String content) {
         if (content.length() > 4000) {
-            warn("Tin nhắn tối đa 4.000 ký tự.");
+            warn(tr("Tin nhắn tối đa 4.000 ký tự.", "Message cannot exceed 4,000 characters."));
             return;
         }
         if (content.isBlank() && mediaId == null) return;
         if (!app.authenticated) {
-            warn("Vui lòng đăng nhập lại để gửi tin.");
+            warn(tr("Vui lòng đăng nhập lại để gửi tin.", "Please sign in again to send messages."));
             return;
         }
         if (app.pendingMessages.size() >= 50) {
-            warn("Có 50 tin chưa xác định kết quả. Vui lòng tra cứu hoặc thử lại các tin đó trước khi gửi thêm.");
+            warn(tr("Có 50 tin chưa xác định kết quả. Vui lòng tra cứu hoặc thử lại các tin đó trước khi gửi thêm.",
+                    "50 messages have uncertain outcomes. Please retry them before sending more."));
             return;
         }
         String stableId = UUID.randomUUID().toString();
@@ -625,19 +704,22 @@ final class ChatView extends ViewSupport {
         app.pendingMessages.put(stableId, p);
         if (app.activeConversation == cid) {
             app.chatInput.setText("");
+            if (app.udp != null) app.udp.typing(cid, false);
             renderMessages(true);
         }
         submitMessage(p);
     }
 
     void submitMessage(PendingMessage p) {
-        p.status = "Đang gửi…";
+        p.status = tr("Đang gửi…", "Sending…");
         SocialClient requestedClient = app.client;
         CompletableFuture.supplyAsync(() -> blocking(requestedClient, "MESSAGE_SEND",
                 of("conversationId", p.conversationId, "clientMessageId", p.clientId, "content", p.content, "mediaId", p.mediaId), p.key), app.workers).whenComplete((ack, error) -> invoke(() -> {
             if (app.client != requestedClient) return;
             if (error != null) {
-                p.status = (unwrap(error) instanceof RemoteException ? "Không gửi được · " : "Chưa xác định kết quả · ") + friendly(error);
+                p.status = (unwrap(error) instanceof RemoteException
+                        ? tr("Không gửi được · ", "Failed · ")
+                        : tr("Chưa xác định kết quả · ", "Uncertain outcome · ")) + friendly(error);
                 if (app.activeConversation == p.conversationId) renderMessages(false);
                 return;
             }
@@ -672,7 +754,7 @@ final class ChatView extends ViewSupport {
             } else if (unwrap(error) instanceof RemoteException r && "NOT_FOUND".equals(r.getCode())) {
                 submitMessage(p);
             } else {
-                p.status = "Tra cứu thất bại · " + friendly(error);
+                p.status = tr("Tra cứu thất bại · ", "Lookup failed · ") + friendly(error);
                 renderMessages(false);
             }
         }));

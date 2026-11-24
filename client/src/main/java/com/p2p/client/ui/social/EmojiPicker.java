@@ -66,9 +66,9 @@ public final class EmojiPicker {
         tabs.setBackground(Theme.SURFACE);
         tabs.setForeground(Theme.TEXT_SECONDARY);
 
-        tabs.addTab("Cảm xúc", createGrid(SMILEYS, onSelect, window));
-        tabs.addTab("Cử chỉ", createGrid(GESTURES, onSelect, window));
-        tabs.addTab("Ký hiệu", createGrid(SYMBOLS, onSelect, window));
+        tabs.addTab(I18n.fromComponent(anchor, "Cảm xúc", "Smileys"), createGrid(SMILEYS, onSelect, window));
+        tabs.addTab(I18n.fromComponent(anchor, "Cử chỉ", "Gestures"), createGrid(GESTURES, onSelect, window));
+        tabs.addTab(I18n.fromComponent(anchor, "Ký hiệu", "Symbols"), createGrid(SYMBOLS, onSelect, window));
 
         root.add(tabs, BorderLayout.CENTER);
         window.setContentPane(root);

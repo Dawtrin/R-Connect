@@ -65,14 +65,19 @@ public final class VideoCallStreamer implements AutoCloseable {
     private Webcam webcam;
 
     public VideoCallStreamer(String localDisplayName) throws SocketException {
+        this(localDisplayName, true);
+    }
+
+    public VideoCallStreamer(String localDisplayName, boolean initialVideoEnabled) throws SocketException {
         this.socket = new DatagramSocket(); // dynamic OS allocated UDP port
         this.localDisplayName = (localDisplayName == null || localDisplayName.isBlank()) ? "R-Connect User" : localDisplayName;
+        this.videoEnabled.set(initialVideoEnabled);
         try {
             this.robot = new Robot();
         } catch (AWTException ignored) {
             this.robot = null;
         }
-        // Webcam is initialized lazily in background capture thread when preview or streaming starts
+        // Webcam is initialized strictly on the background capture thread when videoEnabled is true
     }
 
     private void initWebcam() {
@@ -114,13 +119,7 @@ public final class VideoCallStreamer implements AutoCloseable {
 
     public void setVideoEnabled(boolean enabled) {
         this.videoEnabled.set(enabled);
-        if (enabled && sourceMode == SourceMode.CAMERA) {
-            if (webcam == null) {
-                initWebcam();
-            } else if (!webcam.isOpen()) {
-                try { webcam.open(true); } catch (Throwable ignored) {}
-            }
-        }
+        // Hardware webcam open/close is handled off the EDT inside captureThread
     }
 
     public boolean isVideoEnabled() {
@@ -129,13 +128,7 @@ public final class VideoCallStreamer implements AutoCloseable {
 
     public void setSourceMode(SourceMode mode) {
         this.sourceMode = mode;
-        if (mode == SourceMode.CAMERA) {
-            if (webcam == null) {
-                initWebcam();
-            } else if (!webcam.isOpen()) {
-                try { webcam.open(true); } catch (Throwable ignored) {}
-            }
-        }
+        // Hardware webcam open/close is handled off the EDT inside captureThread
     }
 
     public SourceMode getSourceMode() {
@@ -150,7 +143,7 @@ public final class VideoCallStreamer implements AutoCloseable {
         running.set(true);
 
         captureThread = new Thread(() -> {
-            if (sourceMode == SourceMode.CAMERA && (webcam == null || !webcam.isOpen())) {
+            if (videoEnabled.get() && sourceMode == SourceMode.CAMERA && (webcam == null || !webcam.isOpen())) {
                 initWebcam();
             }
 
@@ -171,12 +164,21 @@ public final class VideoCallStreamer implements AutoCloseable {
                 long startMs = System.currentTimeMillis();
 
                 if (!videoEnabled.get()) {
+                    if (webcam != null && webcam.isOpen()) {
+                        closeWebcam();
+                    }
                     if (remoteAddress != null && remotePort > 0) {
                         sendFlagPacket(remoteAddress, remotePort, 2);
                     }
                     if (localFrameListener != null) localFrameListener.accept(null);
                     try { Thread.sleep(200); } catch (InterruptedException e) { break; }
                     continue;
+                }
+
+                if (sourceMode == SourceMode.CAMERA && (webcam == null || !webcam.isOpen())) {
+                    initWebcam();
+                } else if (sourceMode == SourceMode.SCREEN_SHARE && webcam != null && webcam.isOpen()) {
+                    closeWebcam();
                 }
 
                 BufferedImage frame = captureFrame(frameCounter++);

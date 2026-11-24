@@ -1,41 +1,27 @@
 package com.p2p.client.ui.social;
 
-import com.p2p.client.network.social.*;
-import com.p2p.client.ui.AppIcon;
-import com.p2p.client.ui.Brand;
-import com.p2p.client.ui.Dialogs;
 import com.p2p.client.ui.ModernUI;
-import com.p2p.client.ui.NavItem;
 import com.p2p.client.ui.Theme;
-import com.p2p.common.social.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
 import java.util.*;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.function.*;
-import java.util.prefs.Preferences;
 import static com.p2p.client.ui.social.Values.*;
 import com.p2p.client.ui.social.SocialWindow.Page;
 
-/** ProfileView screen. Extracted from SocialWindow; behaviour is unchanged. */
+/** ProfileView screen: User profile with accurate relationship state, Settings, Instant App Language Switcher, and Block list. */
 final class ProfileView extends ViewSupport {
     ProfileView(SocialWindow app) { super(app); }
 
-    // ================= PROFILE & SETTINGS =================
     void showProfile(long uid) {
-        Page timeline = app.new Page("Bài viết của người dùng", "PROFILE_POSTS_GET", of("authorId", uid), this::postCard);
+        Page timeline = app.new Page(tr("Bài viết của người dùng", "User Posts"), "PROFILE_POSTS_GET", of("authorId", uid), this::postCard);
+        timeline.emptyTitle = tr("Chưa có bài viết", "No posts yet");
+        timeline.emptyHint = tr("Các bài viết công khai hoặc bạn bè được phép xem sẽ hiện ở đây.", "Visible posts from this user will appear here.");
         JPanel panel = new JPanel(new BorderLayout());
         panel.setOpaque(false);
         JPanel profile = vertical();
         profile.setBorder(new EmptyBorder(22, 24, 6, 24));
-        profile.add(muted("Đang tải thông tin hồ sơ…"));
+        profile.add(muted(tr("Đang tải thông tin hồ sơ…", "Loading profile…")));
         panel.add(centered(profile, Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
         panel.add(timeline.panel, BorderLayout.CENTER);
         setView("profile", panel, () -> showProfile(uid));
@@ -76,16 +62,48 @@ final class ProfileView extends ViewSupport {
                 identityBlock.add(about);
             }
             header.add(identityBlock, BorderLayout.CENTER);
+
             JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             actions.setOpaque(false);
-            if (!avatarMedia.isBlank()) actions.add(ghost("Xem ảnh đại diện", () -> app.media.preview(app, avatarMedia)));
+            if (!avatarMedia.isBlank()) {
+                actions.add(ghost(tr("Xem ảnh đại diện", "View Avatar"), () -> app.media.preview(app, avatarMedia)));
+            }
             if (uid != id(app.currentUser, "user")) {
-                actions.add(primary("Nhắn tin", () -> openDirect(uid)));
-                actions.add(button("Kết bạn", () -> mutate("FRIEND_REQUEST", of("targetUserId", uid), null, x -> showPeople())));
-                actions.add(ghost("Báo cáo", () -> report("USER", uid)));
-                actions.add(danger("Chặn", () -> block(uid, true)));
+                actions.add(primary(tr("Nhắn tin", "Message"), () -> openDirect(uid)));
+                String relStatus = str(u, "relationshipStatus");
+                long relId = num(u, "relationId");
+                long relVer = num(u, "relationVersion");
+                switch (relStatus) {
+                    case "ACCEPTED" -> {
+                        actions.add(ModernUI.chip(tr("BẠN BÈ", "FRIENDS"), ModernUI.Tone.SUCCESS));
+                        actions.add(button(tr("Hủy kết bạn", "Unfriend"), () -> {
+                            if (confirm(tr("Hủy kết bạn với người này?", "Unfriend this user?"))) {
+                                mutate("FRIEND_REMOVE", of("relationId", relId), null, x -> showProfile(uid));
+                            }
+                        }));
+                    }
+                    case "PENDING_INCOMING" -> {
+                        actions.add(primary(tr("Chấp nhận lời mời", "Accept Request"), () ->
+                                mutate("FRIEND_ACCEPT", of("relationId", relId, "expectedVersion", relVer), null, x -> showProfile(uid))));
+                        actions.add(button(tr("Từ chối", "Decline"), () ->
+                                mutate("FRIEND_REJECT", of("relationId", relId, "expectedVersion", relVer), null, x -> showProfile(uid))));
+                    }
+                    case "PENDING_OUTGOING" -> {
+                        actions.add(button(tr("Hủy lời mời đã gửi", "Cancel Request"), () ->
+                                mutate("FRIEND_CANCEL", of("relationId", relId, "expectedVersion", relVer), null, x -> showProfile(uid))));
+                    }
+                    default -> {
+                        actions.add(button(tr("Kết bạn", "Add Friend"), () ->
+                                mutate("FRIEND_REQUEST", of("targetUserId", uid), null, x -> {
+                                    info(tr("Đã gửi lời mời kết bạn!", "Friend request sent!"));
+                                    showProfile(uid);
+                                })));
+                    }
+                }
+                actions.add(ghost(tr("Báo cáo", "Report"), () -> report("USER", uid)));
+                actions.add(danger(tr("Chặn", "Block"), () -> block(uid, true)));
             } else {
-                actions.add(primary("Chỉnh sửa hồ sơ", this::showSettings));
+                actions.add(primary(tr("Chỉnh sửa hồ sơ", "Edit Profile"), this::showSettings));
             }
             header.add(actions, BorderLayout.SOUTH);
             profile.add(header);
@@ -98,7 +116,7 @@ final class ProfileView extends ViewSupport {
     void showSettings() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setOpaque(false);
-        panel.add(centered(titled("Hồ sơ & Cài đặt"), Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
+        panel.add(centered(titled(tr("Hồ sơ & Cài đặt", "Profile & Settings")), Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
         JTabbedPane tabs = new JTabbedPane();
         styleTabs(tabs);
         panel.add(tabs, BorderLayout.CENTER);
@@ -108,47 +126,51 @@ final class ProfileView extends ViewSupport {
 
         JTextField nameField = new JTextField(name(app.currentUser));
         JTextArea bio = text(str(app.currentUser, "bio"), 4);
-        addField(settings, "Tên hiển thị", nameField);
-        addField(settings, "Tiểu sử / Giới thiệu", framed(bio));
-        JComboBox<String> language = new JComboBox<>(new String[]{"Tiếng Việt", "English"});
-        language.setSelectedIndex("en".equals(app.displayLanguage) ? 1 : 0);
-        addField(settings, "Ngôn ngữ hiển thị tin nhắn", language);
-        settings.add(readable("Tin nhắn vẫn được lưu bằng ngôn ngữ gốc trên server. Bạn có thể bấm “Xem bản gốc” trong từng tin để đối chiếu."));
+        addField(settings, tr("Tên hiển thị", "Display Name"), nameField);
+        addField(settings, tr("Tiểu sử / Giới thiệu", "Bio / About"), framed(bio));
+
+        JComboBox<String> language = new JComboBox<>(new String[]{"Tiếng Việt (Vietnamese)", "English"});
+        language.setSelectedIndex(isEn() ? 1 : 0);
+        addField(settings, tr("Ngôn ngữ giao diện & Dịch tin nhắn", "App Language & Message Translation"), language);
+        settings.add(readable(tr(
+                "Đổi ngôn ngữ sẽ cập nhật ngay toàn bộ giao diện ứng dụng và tự động dịch tin nhắn sang ngôn ngữ đã chọn (tin gốc trên máy chủ vẫn giữ nguyên).",
+                "Switching language immediately updates the entire application UI and translates chat messages into your chosen language (original messages remain untouched on the server).")));
         language.addActionListener(e -> {
             String next = language.getSelectedIndex() == 1 ? "en" : "vi";
             if (!next.equals(app.displayLanguage)) {
-                app.displayLanguage = next;
-                app.userPreferences.put("displayLanguage", next);
-                app.translations.clear();
-                app.translationPending.clear();
-                app.originalMessages.clear();
-                if (app.activeConversation > 0) renderMessages(false);
+                app.applyLanguage(next);
             }
         });
-        JLabel version = label("Đang tải hồ sơ…", false);
+
+        JLabel version = label(tr("Đang tải hồ sơ…", "Loading profile…"), false);
         settings.add(version);
         Map<String, Object> profile = new LinkedHashMap<>(app.currentUser);
 
         nameField.setEnabled(false);
         bio.setEnabled(false);
 
-        JButton save = Theme.primaryButton("Lưu hồ sơ");
+        JButton save = Theme.primaryButton(tr("Lưu hồ sơ", "Save Profile"));
         save.addActionListener(e -> mutate("PROFILE_UPDATE", of("displayName", nameField.getText(), "bio", bio.getText(), "expectedVersion", num(profile, "version")), save, r -> {
             Map<String, Object> u = map(r.get("profile"));
             if (u.isEmpty()) u = r;
             updateSelf(u);
+            info(tr("Đã lưu thông tin hồ sơ.", "Profile updated."));
             showSettings();
         }));
 
         settings.add(horizontal(
                 save,
-                button("Đổi ảnh đại diện", () -> {
+                button(tr("Đổi ảnh đại diện", "Change Avatar"), () -> {
                     JFileChooser c = new JFileChooser();
                     if (c.showOpenDialog(app) == JFileChooser.APPROVE_OPTION) {
-                        app.media.upload(app, c.getSelectedFile().toPath(), "AVATAR", mid -> mutate("AVATAR_SET", of("mediaId", mid, "expectedVersion", num(profile, "version")), null, r -> showSettings()));
+                        app.media.upload(app, c.getSelectedFile().toPath(), "AVATAR", mid ->
+                                mutate("AVATAR_SET", of("mediaId", mid, "expectedVersion", num(profile, "version")), null, r -> {
+                                    info(tr("Đã cập nhật ảnh đại diện!", "Avatar updated!"));
+                                    showSettings();
+                                }));
                     }
                 }),
-                button("Xem hồ sơ công khai", () -> showProfile(id(app.currentUser, "user")))
+                button(tr("Xem hồ sơ công khai", "View Public Profile"), () -> showProfile(id(app.currentUser, "user")))
         ));
 
         settings.add(Box.createVerticalStrut(24));
@@ -156,20 +178,20 @@ final class ProfileView extends ViewSupport {
         settingsRule.setForeground(Theme.BORDER);
         settings.add(settingsRule);
         settings.add(Box.createVerticalStrut(20));
-        settings.add(label("Đổi mật khẩu tài khoản", true));
+        settings.add(label(tr("Đổi mật khẩu tài khoản", "Change Account Password"), true));
         JPasswordField old = new JPasswordField(), next = new JPasswordField(), repeat = new JPasswordField();
-        addField(settings, "Mật khẩu hiện tại", old);
-        addField(settings, "Mật khẩu mới (10–128 ký tự)", next);
-        addField(settings, "Xác nhận mật khẩu mới", repeat);
+        addField(settings, tr("Mật khẩu hiện tại", "Current Password"), old);
+        addField(settings, tr("Mật khẩu mới (10–128 ký tự)", "New Password (10–128 chars)"), next);
+        addField(settings, tr("Xác nhận mật khẩu mới", "Confirm New Password"), repeat);
 
-        JButton change = Theme.primaryButton("Cập nhật mật khẩu");
+        JButton change = Theme.primaryButton(tr("Cập nhật mật khẩu", "Update Password"));
         change.addActionListener(e -> {
             char[] a = old.getPassword(), b = next.getPassword(), c = repeat.getPassword();
             if (b.length < 10 || b.length > 128 || !Arrays.equals(b, c)) {
                 Arrays.fill(a, '\0');
                 Arrays.fill(b, '\0');
                 Arrays.fill(c, '\0');
-                warn("Mật khẩu mới cần từ 10–128 ký tự và phải trùng khớp.");
+                warn(tr("Mật khẩu mới cần từ 10–128 ký tự và phải trùng khớp.", "New password must be 10–128 characters and match confirmation."));
                 return;
             }
             Map<String, Object> payload = of("currentPassword", new String(a), "newPassword", new String(b));
@@ -182,19 +204,28 @@ final class ProfileView extends ViewSupport {
             command("AUTH_PASSWORD_CHANGE", payload, null, change, r -> {
                 clearSession();
                 showAuth(false);
-                info("Đã đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+                info(tr("Đã đổi mật khẩu thành công. Vui lòng đăng nhập lại.", "Password changed successfully. Please sign in again."));
             }, false);
         });
         settings.add(horizontal(change));
-        tabs.addTab("Hồ sơ & Bảo mật", columnScroll(settings, Theme.COLUMN_WIDTH));
+        tabs.addTab(tr("Hồ sơ & Bảo mật", "Profile & Security"), columnScroll(settings, Theme.COLUMN_WIDTH));
 
-        Page blocked = app.new Page("Danh sách người dùng đã chặn", "BLOCK_LIST", of(), u -> {
+        Page[] blockedRef = new Page[1];
+        Page blocked = app.new Page(tr("Danh sách người dùng đã chặn", "Blocked Users"), "BLOCK_LIST", of(), u -> {
             JPanel card = card();
-            card.add(label(name(u), false), BorderLayout.WEST);
-            card.add(button("Bỏ chặn", () -> block(id(u, "user"), false)), BorderLayout.EAST);
+            String display = name(u) + (str(u, "username").isBlank() ? "" : " (@" + str(u, "username") + ")");
+            card.add(label(display, false), BorderLayout.WEST);
+            card.add(button(tr("Bỏ chặn", "Unblock"), () ->
+                    mutate("BLOCK_SET", of("targetUserId", id(u, "user"), "blocked", false), null, r -> {
+                        info(tr("Đã bỏ chặn người dùng.", "User unblocked."));
+                        if (blockedRef[0] != null) blockedRef[0].load(true);
+                    })), BorderLayout.EAST);
             return card;
         });
-        tabs.addTab("Đã chặn", blocked.panel);
+        blockedRef[0] = blocked;
+        blocked.emptyTitle = tr("Chưa chặn ai", "No blocked users");
+        blocked.emptyHint = tr("Những người dùng bị bạn chặn sẽ xuất hiện tại đây.", "Users you block will be listed here.");
+        tabs.addTab(tr("Đã chặn", "Blocked"), blocked.panel);
 
         setView("settings", panel, this::showSettings);
         long token = app.generation;
@@ -207,7 +238,7 @@ final class ProfileView extends ViewSupport {
             updateSelf(u);
             nameField.setText(name(u));
             bio.setText(str(u, "bio"));
-            version.setText("Phiên bản hồ sơ v" + num(u, "version"));
+            version.setText(tr("Phiên bản hồ sơ v", "Profile version v") + num(u, "version"));
             nameField.setEnabled(true);
             bio.setEnabled(true);
         });

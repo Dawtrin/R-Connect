@@ -1,0 +1,12 @@
+==================================================
+           THÔNG TIN TÀI KHOẢN R-CONNECT          
+==================================================
+Mã người dùng (User ID)    : 4
+Tên đăng nhập (Username)   : admin
+Tên hiển thị (Display Name): Quản trị viên
+Mật khẩu (Password)        : 1234567890
+Vai trò (Role)             : ADMIN
+Trạng thái (Status)        : ACTIVE
+Thời gian đăng ký          : 2026-11-24 12:00:23 (GMT+7)
+Tiểu sử (Bio)              : (Trống)
+==================================================

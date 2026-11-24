@@ -79,6 +79,11 @@ class SocialServiceTest {
                 .findFirst().orElseThrow();
         assertEquals("Open study room",listed.get("title"));
         assertEquals(true,listed.get("canJoin"));
+        // Blocked user cannot see or join owner's public group
+        call(a,"BLOCK_SET",Map.of("targetUserId",b,"blocked",true));
+        assertTrue(((List<?>)call(b,"GROUP_PUBLIC_LIST",Map.of("limit",20)).get("items")).isEmpty());
+        assertCode("ACTION_FORBIDDEN",()->call(b,"GROUP_JOIN",Map.of("conversationId",group)));
+        call(a,"BLOCK_SET",Map.of("targetUserId",b,"blocked",false));
         Map<String,Object> joined=call(c,"GROUP_JOIN",Map.of("conversationId",group));
         assertEquals(2L,((Number)joined.get("version")).longValue());
         assertEquals(2L,((Number)db.read(conn->SocialService.one(conn,"SELECT version FROM conversations WHERE id=?",group).get("version"))).longValue());

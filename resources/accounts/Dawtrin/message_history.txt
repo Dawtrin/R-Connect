@@ -1,7 +1,7 @@
 ==================================================
    LỊCH SỬ TIN NHẮN ĐÃ GỬI - TÀI KHOẢN: Dawtrin
 ==================================================
-Tổng số tin nhắn đã gửi: 2
+Tổng số tin nhắn đã gửi: 16
 
 [1] Thời gian: 2026-11-02 02:48:19 (GMT+7)
     Cuộc hội thoại: #1 (DIRECT)
@@ -12,4 +12,74 @@ Tổng số tin nhắn đã gửi: 2
     Cuộc hội thoại: #1 (DIRECT)
     Loại: TEXT
     Nội dung: Oke test😆
+--------------------------------------------------
+[3] Thời gian: 2026-11-16 13:34:44 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: qua chưa
+--------------------------------------------------
+[4] Thời gian: 2026-11-16 13:35:02 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: 🤟
+--------------------------------------------------
+[5] Thời gian: 2026-11-16 13:35:10 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: lỏ r
+--------------------------------------------------
+[6] Thời gian: 2026-11-16 13:35:21 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: FILE
+    Nội dung: Tin nhắn thoại (8s)
+--------------------------------------------------
+[7] Thời gian: 2026-11-16 13:36:08 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: Tau có làm chuyển tiếng anh đâu
+--------------------------------------------------
+[8] Thời gian: 2026-11-16 13:36:47 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: FILE
+    Nội dung: C4. Ly thuyet uoc luong va kiem dinh gia thiet.pdf
+--------------------------------------------------
+[9] Thời gian: 2026-11-16 13:37:24 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: để tau check
+--------------------------------------------------
+[10] Thời gian: 2026-11-16 13:43:24 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: nhóm
+--------------------------------------------------
+[11] Thời gian: 2026-11-16 13:43:29 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: ngu
+--------------------------------------------------
+[12] Thời gian: 2026-11-16 13:43:39 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: tú nghiên
+--------------------------------------------------
+[13] Thời gian: 2026-11-17 14:13:34 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: Test
+--------------------------------------------------
+[14] Thời gian: 2026-11-24 12:24:16 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: alooo
+--------------------------------------------------
+[15] Thời gian: 2026-11-24 12:24:42 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: xin chào
+--------------------------------------------------
+[16] Thời gian: 2026-11-24 12:25:00 (GMT+7)
+    Cuộc hội thoại: #1 (DIRECT)
+    Loại: TEXT
+    Nội dung: chào buổi sáng
 --------------------------------------------------

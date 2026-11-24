@@ -1,5 +1,6 @@
 package com.p2p.client.ui;
 
+import com.p2p.client.ui.social.I18n;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -16,12 +17,12 @@ public final class Dialogs {
 
     /** Single-button notice. */
     public static void notice(Component parent, String title, String message, Kind kind) {
-        show(parent, title, message, kind, "Đã hiểu", null, false);
+        show(parent, title, message, kind, I18n.fromComponent(parent, "Đã hiểu", "Got it"), null, false);
     }
 
     /** Two-button confirmation; returns true when the primary button is chosen. */
     public static boolean confirm(Component parent, String title, String message, String confirmText, boolean danger) {
-        return show(parent, title, message, danger ? Kind.WARNING : Kind.INFO, confirmText, "Hủy", danger) == 0;
+        return show(parent, title, message, danger ? Kind.WARNING : Kind.INFO, confirmText, I18n.fromComponent(parent, "Hủy", "Cancel"), danger) == 0;
     }
 
     /** Returns 0 for the primary choice, 1 for the secondary choice or when dismissed. */
@@ -154,7 +155,7 @@ public final class Dialogs {
         content.add(body, BorderLayout.CENTER);
         JButton primary = Theme.primaryButton(confirmText);
         primary.addActionListener(e -> { ok[0] = true; dialog.dispose(); });
-        JButton cancel = Theme.secondaryButton("Hủy");
+        JButton cancel = Theme.secondaryButton(I18n.fromComponent(parent, "Hủy", "Cancel"));
         cancel.addActionListener(e -> dialog.dispose());
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);

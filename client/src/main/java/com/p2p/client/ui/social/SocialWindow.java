@@ -11,12 +11,8 @@ import com.p2p.common.social.*;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
@@ -31,6 +27,16 @@ import static com.p2p.client.ui.social.Values.*;
  * All TCP network IO, hashing, and file IO run strictly off the Swing EDT.
  */
 public final class SocialWindow extends JFrame {
+    private static final boolean IN_JUNIT = detectJUnit();
+
+    private static boolean detectJUnit() {
+        for (StackTraceElement el : Thread.currentThread().getStackTrace()) {
+            String c = el.getClassName();
+            if (c.startsWith("org.junit.") || c.endsWith("Test")) return true;
+        }
+        return false;
+    }
+
     final ExecutorService workers = Executors.newFixedThreadPool(4, r -> {
         Thread t = new Thread(r, "social-ui-worker");
         t.setDaemon(true);
@@ -41,9 +47,7 @@ public final class SocialWindow extends JFrame {
     final JPanel body = new JPanel(new BorderLayout());
     final ChatView chatView = new ChatView(this);
     final ReportView reportView = new ReportView(this);
-
     final BroadcastView broadcastView = new BroadcastView(this);
-
     final AuthView authView = new AuthView(this);
     final NotificationsView notificationsView = new NotificationsView(this);
     final AdminView adminView = new AdminView(this);
@@ -87,6 +91,7 @@ public final class SocialWindow extends JFrame {
     String host = System.getProperty("social.host", "localhost");
     int port = Integer.getInteger("social.port", 5000);
     String view = "";
+    boolean authRegisterMode;
     Runnable refreshCurrent = () -> {};
     boolean authenticated;
     long generation;
@@ -94,6 +99,7 @@ public final class SocialWindow extends JFrame {
     final Preferences userPreferences = Preferences.userNodeForPackage(SocialWindow.class);
     final Map<String, Map<String, Object>> translations = new ConcurrentHashMap<>();
     final Set<String> translationPending = ConcurrentHashMap.newKeySet();
+    final Set<String> translationFailed = ConcurrentHashMap.newKeySet();
     final Set<String> originalMessages = ConcurrentHashMap.newKeySet();
 
     // Chat state
@@ -107,7 +113,6 @@ public final class SocialWindow extends JFrame {
     JLabel typingLabel;
     JTextArea chatInput;
 
-
     // Timers
     final javax.swing.Timer typingExpiry = new javax.swing.Timer(5000, e -> { if (typingLabel != null) typingLabel.setText(" "); });
     final javax.swing.Timer countRefresh = new javax.swing.Timer(20000, e -> { if (authenticated) refreshCount(); });
@@ -119,8 +124,13 @@ public final class SocialWindow extends JFrame {
         setSize(1160, 780);
         setMinimumSize(new Dimension(1000, 620));
         setLocationRelativeTo(null);
-        String savedLanguage = userPreferences.get("displayLanguage", "vi");
-        displayLanguage = savedLanguage.startsWith("en") ? "en" : "vi";
+        if (IN_JUNIT) {
+            displayLanguage = "vi";
+        } else {
+            String savedLanguage = userPreferences.get("displayLanguage.login", "vi");
+            displayLanguage = I18n.isEnglishCode(savedLanguage) ? "en" : "vi";
+            I18n.setFallbackLanguage(displayLanguage);
+        }
 
         root.setBackground(Theme.APP_BACKGROUND);
         root.setBorder(new EmptyBorder(0, 0, 0, 0));
@@ -146,15 +156,87 @@ public final class SocialWindow extends JFrame {
         });
     }
 
+    public boolean isEn() {
+        return I18n.isEnglishCode(displayLanguage);
+    }
+
+    public String tr(String vi, String en) {
+        return isEn() ? en : vi;
+    }
+
+    void loadUserLanguagePreference(String username) {
+        if (IN_JUNIT || username == null || username.isBlank()) return;
+        String key = "displayLanguage.user." + username.trim().toLowerCase(Locale.ROOT);
+        String saved = userPreferences.get(key, displayLanguage);
+        displayLanguage = I18n.isEnglishCode(saved) ? "en" : "vi";
+        I18n.setFallbackLanguage(displayLanguage);
+    }
+
+    public void applyLanguage(String lang) {
+        String next = I18n.isEnglishCode(lang) ? "en" : "vi";
+        if (next.equals(displayLanguage)) return;
+        displayLanguage = next;
+        I18n.setFallbackLanguage(next);
+        if (!IN_JUNIT) {
+            userPreferences.put("displayLanguage.login", next);
+            String uname = str(currentUser, "username");
+            if (!uname.isBlank()) {
+                userPreferences.put("displayLanguage.user." + uname.trim().toLowerCase(Locale.ROOT), next);
+            }
+        }
+        translations.clear();
+        translationPending.clear();
+        translationFailed.clear();
+        originalMessages.clear();
+        convPanelCache = null;
+        convPage = null;
+
+        if (!authenticated) {
+            showAuth(authRegisterMode);
+            info(tr("Đã chuyển ngôn ngữ sang Tiếng Việt.", "Switched language to English."));
+            return;
+        }
+
+        String previousView = view;
+        long prevConvId = activeConversation;
+        Map<String, Object> prevConvData = new LinkedHashMap<>(activeConversationData);
+        shellView.showMain();
+        switch (previousView) {
+            case "settings" -> showSettings();
+            case "people" -> showPeople();
+            case "conversations" -> showConversations();
+            case "publicGroups" -> messagesView.showPublicGroups();
+            case "chat" -> {
+                if (prevConvId > 0 && !prevConvData.isEmpty()) openChat(prevConvData);
+                else showConversations();
+            }
+            case "broadcast" -> showBroadcast();
+            case "notifications" -> showNotifications();
+            case "admin" -> showAdmin();
+            default -> showFeed();
+        }
+        info(tr("Đã chuyển giao diện và dịch tin nhắn sang Tiếng Việt.", "Switched interface and message translation to English."));
+    }
+
+    public void toggleLanguage() {
+        applyLanguage(isEn() ? "vi" : "en");
+    }
+
     void shutdown() {
         reconnectToken++;
         authenticated = false;
+        chatView.stopRecordingIfActive();
+        AudioPlayer.stop();
         SocialClient closing = client;
         client = null;
         countRefresh.stop();
         udpRefresh.stop();
         eventRefresh.stop();
         typingExpiry.stop();
+        if (currentCall != null) {
+            currentCall.hangup();
+            currentCall = null;
+        }
         if (udp != null) udp.close();
         thumbnails.close();
         media.close();
@@ -228,7 +310,7 @@ public final class SocialWindow extends JFrame {
     JPanel horizontal(Component... components) {
         JPanel p = new JPanel(new WrapLayout());
         p.setOpaque(false);
-        p.setBorder(new EmptyBorder(0, -8, 0, 0));   // cancel the leading gap so rows align with fields
+        p.setBorder(new EmptyBorder(0, -8, 0, 0));
         p.setAlignmentX(Component.LEFT_ALIGNMENT);
         for (Component c : components) p.add(c);
         return p;
@@ -261,10 +343,6 @@ public final class SocialWindow extends JFrame {
         return text(value, rows, false);
     }
 
-    /**
-     * Read-only areas must freeze their caret BEFORE the text is set: otherwise the queued caret repaint scrolls the
-     * enclosing scroll pane to the last card (the feed used to open at the bottom).
-     */
     JTextArea text(String value, int rows, boolean readOnly) {
         JTextArea a = new JTextArea(rows, 35);
         if (readOnly) {
@@ -283,7 +361,6 @@ public final class SocialWindow extends JFrame {
         return a;
     }
 
-    /** Wraps a text area in a scroll pane with the R-Connect input frame (hairline border, accent when focused). */
     JScrollPane framed(JTextArea area) {
         JScrollPane s = new JScrollPane();
         s.setViewport(new JViewport() {
@@ -349,7 +426,6 @@ public final class SocialWindow extends JFrame {
         return a;
     }
 
-    /** Scrollable form column: content is centered with a readable maximum width. */
     JScrollPane columnScroll(JPanel content, int maxWidth) {
         content.setMaximumSize(new Dimension(maxWidth, Integer.MAX_VALUE));
         StackPanel holder = new StackPanel(true);
@@ -397,7 +473,8 @@ public final class SocialWindow extends JFrame {
     }
 
     JButton photo(String mediaId, String fileName) {
-        JButton b = Theme.secondaryButton("Xem ảnh");
+        String labelText = tr("Xem ảnh", "View photo");
+        JButton b = Theme.secondaryButton(labelText);
         b.setFont(Theme.font(Font.PLAIN, 12));
         b.setForeground(Theme.TEXT_SECONDARY);
         b.setIcon(new AppIcon(AppIcon.Type.FILE, Theme.MUTED, 20));
@@ -405,7 +482,7 @@ public final class SocialWindow extends JFrame {
         b.setVerticalTextPosition(SwingConstants.BOTTOM);
         b.setIconTextGap(8);
         b.setPreferredSize(new Dimension(196, 150));
-        b.setToolTipText(fileName.isBlank() ? "Xem ảnh" : "Xem ảnh · " + fileName);
+        b.setToolTipText(fileName.isBlank() ? labelText : labelText + " · " + fileName);
         b.addActionListener(e -> media.preview(this, mediaId));
         thumbnails.load(mediaId, 180, icon -> {
             b.setIcon(icon);
@@ -416,10 +493,6 @@ public final class SocialWindow extends JFrame {
         return b;
     }
 
-    /**
-     * Page header: title on the left, page actions on the right. Callers may add a subtitle row to CENTER
-     * and a meta row to SOUTH.
-     */
     JPanel titled(String title, Component... actions) {
         JPanel p = new JPanel(new BorderLayout(12, 6));
         p.setOpaque(false);
@@ -463,7 +536,6 @@ public final class SocialWindow extends JFrame {
         });
     }
 
-    /** Sets (or clears with null) the right-hand context panel. It is hidden automatically on narrow windows. */
     void setContext(JComponent component) {
         contextContent = component;
         contextHolder.removeAll();
@@ -481,17 +553,23 @@ public final class SocialWindow extends JFrame {
     }
 
     void setView(String name, JPanel panel, Runnable refresh) {
+        chatView.stopRecordingIfActive();
         setContext(null);
-        if (authenticated && connection.getText() != null && connection.getText().contains("Bảng tin có cập nhật mới")) {
-            connection.setText("Đã kết nối TCP · " + host + ":" + port);
+        if (authenticated && connection.getText() != null && (connection.getText().contains("Bảng tin có cập nhật mới") || connection.getText().contains("New feed updates"))) {
+            connection.setText(tr("Đã kết nối TCP · ", "TCP Connected · ") + host + ":" + port + (udp != null ? " · UDP" : ""));
         }
         generation++;
         view = name;
         activeConversation = 0;
         messages.clear();
-        translations.clear();
         translationPending.clear();
-        originalMessages.clear();
+        while (translations.size() > 500) {
+            Iterator<String> it = translations.keySet().iterator();
+            if (it.hasNext()) {
+                it.next();
+                it.remove();
+            } else break;
+        }
         body.removeAll();
         body.add(panel);
         refreshCurrent = refresh;
@@ -504,7 +582,7 @@ public final class SocialWindow extends JFrame {
         String selected = switch (currentView) {
             case "post" -> "feed";
             case "profile" -> "people";
-            case "chat" -> "conversations";
+            case "chat", "publicGroups" -> "conversations";
             default -> currentView;
         };
         navButtons.forEach((key, nav) -> nav.setActive(key.equals(selected)));
@@ -516,12 +594,12 @@ public final class SocialWindow extends JFrame {
 
     Map<String, Object> blocking(String type, Map<String, Object> payload, String key) {
         SocialClient c = client;
-        if (c == null) throw new IllegalStateException("Chưa kết nối server");
+        if (c == null) throw new IllegalStateException(tr("Chưa kết nối server", "Not connected to server"));
         return (key == null ? c.request(type, payload) : c.request(type, payload, key)).join();
     }
 
     Map<String, Object> blocking(SocialClient c, String type, Map<String, Object> payload, String key) {
-        if (c == null) throw new IllegalStateException("Chưa kết nối server");
+        if (c == null) throw new IllegalStateException(tr("Chưa kết nối server", "Not connected to server"));
         return (key == null ? c.request(type, payload) : c.request(type, payload, key)).join();
     }
 
@@ -542,9 +620,12 @@ public final class SocialWindow extends JFrame {
             if (error != null) {
                 Throwable cause = unwrap(error);
                 if (retry && (cause instanceof java.io.IOException || cause instanceof TimeoutException)) {
-                    int answer = Dialogs.choose(this, "Kết nối gián đoạn",
-                            "Chưa xác định kết quả. Thử lại dùng cùng mã để tránh tạo bản sao.\n" + friendly(cause),
-                            Dialogs.Kind.WARNING, "Thử lại cùng thao tác", "Đóng");
+                    int answer = Dialogs.choose(this,
+                            tr("Kết nối gián đoạn", "Connection Interrupted"),
+                            tr("Chưa xác định kết quả. Thử lại dùng cùng mã để tránh tạo bản sao.\n", "Outcome uncertain. Retry with the same idempotency key to prevent duplicates.\n") + friendly(cause),
+                            Dialogs.Kind.WARNING,
+                            tr("Thử lại cùng thao tác", "Retry safely"),
+                            tr("Đóng", "Close"));
                     if (answer == 0) command(type, payload, key, source, success, true);
                     else showError(cause);
                 } else {
@@ -568,34 +649,34 @@ public final class SocialWindow extends JFrame {
         if (e instanceof RemoteException remote) {
             String code = remote.getCode();
             return switch (code) {
-                case "INVALID_CREDENTIALS" -> "Tên đăng nhập hoặc mật khẩu không chính xác.";
-                case "ALREADY_SIGNED_IN" -> "Tài khoản đang đăng nhập trên thiết bị khác.";
-                case "VERSION_CONFLICT" -> "Dữ liệu đã thay đổi trên máy chủ. Tải lại trang trước khi lưu.";
-                case "NOT_FOUND" -> "Nội dung không còn khả dụng hoặc bạn không có quyền truy cập.";
-                case "FRIENDSHIP_REQUIRED" -> "Cần kết bạn trước khi thực hiện hành động này.";
-                case "UNAUTHENTICATED" -> "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.";
-                case "RATE_LIMITED" -> "Bạn thao tác quá nhanh. Vui lòng đợi trong giây lát rồi thử lại.";
-                case "USERNAME_TAKEN" -> "Tên đăng nhập này đã được sử dụng bởi người khác.";
-                case "ACCOUNT_SUSPENDED" -> "Tài khoản hiện đã bị tạm khóa bởi quản trị viên.";
-                case "ACTION_FORBIDDEN" -> "Bạn không có quyền thực hiện thao tác này.";
-                case "INVALID_STATE" -> "Trạng thái đã thay đổi. Vui lòng làm mới danh sách.";
-                case "INVALID_REQUEST" -> "Dữ liệu gửi lên chưa hợp lệ. Vui lòng kiểm tra lại.";
-                case "INCOMING_REQUEST_EXISTS" -> "Người này đã gửi lời mời cho bạn. Hãy chấp nhận từ tab Đã nhận.";
-                case "ALREADY_FRIENDS" -> "Hai bạn đã là bạn bè của nhau.";
-                case "QUOTA_EXCEEDED" -> "Đã đạt giới hạn dung lượng hoặc số thành viên.";
-                case "FILE_TOO_LARGE" -> "Tệp vượt quá giới hạn: tin nhắn 25 MiB; ảnh/avatar 5 MiB.";
-                case "HASH_MISMATCH" -> "Tệp không khớp mã băm SHA-256. Hãy chọn lại tệp và tải tiếp.";
-                case "OFFSET_MISMATCH" -> "Vị trí tải tệp chưa khớp với máy chủ. Tiếp tục theo xác nhận.";
-                case "TRANSFER_EXPIRED" -> "Lượt tải tệp đã hết hạn. Hãy bấm tiếp tục để lấy lượt tải mới.";
-                case "SERVER_BUSY" -> "Máy chủ đang xử lý nhiều tác vụ. Vui lòng thử lại sau giây lát.";
-                case "IDEMPOTENCY_CONFLICT" -> "Mã thao tác đã gắn với nội dung khác. Vui lòng kiểm tra lại.";
-                case "VERSION_UNSUPPORTED" -> "Phiên bản client không tương thích với máy chủ.";
-                case "UNSUPPORTED_OPERATION" -> "Máy chủ chưa hỗ trợ thao tác này.";
-                case "INTERNAL_ERROR" -> "Máy chủ gặp sự cố nội bộ. Vui lòng thử lại sau.";
-                default -> code + " · " + Objects.toString(e.getMessage(), "Không thể thực hiện");
+                case "INVALID_CREDENTIALS" -> tr("Tên đăng nhập hoặc mật khẩu không chính xác.", "Incorrect username or password.");
+                case "ALREADY_SIGNED_IN" -> tr("Tài khoản đang đăng nhập trên thiết bị khác.", "This account is already signed in on another session.");
+                case "VERSION_CONFLICT" -> tr("Dữ liệu đã thay đổi trên máy chủ. Tải lại trang trước khi lưu.", "Data has changed on the server. Please reload before saving.");
+                case "NOT_FOUND" -> tr("Nội dung không còn khả dụng hoặc bạn không có quyền truy cập.", "Content is no longer available or you do not have access.");
+                case "FRIENDSHIP_REQUIRED" -> tr("Cần kết bạn trước khi thực hiện hành động này.", "Friendship is required to perform this action.");
+                case "UNAUTHENTICATED" -> tr("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.", "Session expired. Please sign in again.");
+                case "RATE_LIMITED" -> tr("Bạn thao tác quá nhanh. Vui lòng đợi trong giây lát rồi thử lại.", "Too many requests. Please wait a moment and try again.");
+                case "USERNAME_TAKEN" -> tr("Tên đăng nhập này đã được sử dụng bởi người khác.", "This username is already taken.");
+                case "ACCOUNT_SUSPENDED" -> tr("Tài khoản hiện đã bị tạm khóa bởi quản trị viên.", "This account has been suspended by an administrator.");
+                case "ACTION_FORBIDDEN" -> tr("Bạn không có quyền thực hiện thao tác này.", "You do not have permission to perform this action.");
+                case "INVALID_STATE" -> tr("Trạng thái đã thay đổi. Vui lòng làm mới danh sách.", "State has changed. Please refresh the view.");
+                case "INVALID_REQUEST" -> tr("Dữ liệu gửi lên chưa hợp lệ. Vui lòng kiểm tra lại.", "Invalid input data. Please check and try again.");
+                case "INCOMING_REQUEST_EXISTS" -> tr("Người này đã gửi lời mời cho bạn. Hãy chấp nhận từ tab Đã nhận.", "This user already sent you a friend request. Accept it in the Incoming tab.");
+                case "ALREADY_FRIENDS" -> tr("Hai bạn đã là bạn bè của nhau.", "You are already friends.");
+                case "QUOTA_EXCEEDED" -> tr("Đã đạt giới hạn dung lượng hoặc số thành viên.", "Storage quota or member limit reached.");
+                case "FILE_TOO_LARGE" -> tr("Tệp vượt quá giới hạn: tin nhắn 25 MiB; ảnh/avatar 5 MiB.", "File exceeds limit: 25 MiB for chat files; 5 MiB for photos/avatars.");
+                case "HASH_MISMATCH" -> tr("Tệp không khớp mã băm SHA-256. Hãy chọn lại tệp và tải tiếp.", "SHA-256 checksum mismatch. Please re-select the file.");
+                case "OFFSET_MISMATCH" -> tr("Vị trí tải tệp chưa khớp với máy chủ. Tiếp tục theo xác nhận.", "Chunk offset mismatch with server.");
+                case "TRANSFER_EXPIRED" -> tr("Lượt tải tệp đã hết hạn. Hãy bấm tiếp tục để lấy lượt tải mới.", "Transfer session expired. Click Resume to continue.");
+                case "SERVER_BUSY" -> tr("Máy chủ đang xử lý nhiều tác vụ. Vui lòng thử lại sau giây lát.", "Server is busy. Please try again shortly.");
+                case "IDEMPOTENCY_CONFLICT" -> tr("Mã thao tác đã gắn với nội dung khác. Vui lòng kiểm tra lại.", "Idempotency key conflict with different payload.");
+                case "VERSION_UNSUPPORTED" -> tr("Phiên bản client không tương thích với máy chủ.", "Client protocol version is incompatible with server.");
+                case "UNSUPPORTED_OPERATION" -> tr("Máy chủ chưa hỗ trợ thao tác này.", "Operation is not supported on this server.");
+                case "INTERNAL_ERROR" -> tr("Máy chủ gặp sự cố nội bộ. Vui lòng thử lại sau.", "Internal server error. Please try again later.");
+                default -> code + " · " + Objects.toString(e.getMessage(), tr("Không thể thực hiện", "Operation failed"));
             };
         }
-        return Objects.toString(e.getMessage(), "Không thể kết nối máy chủ TCP. Hãy thử lại.");
+        return Objects.toString(e.getMessage(), tr("Không thể kết nối máy chủ TCP. Hãy thử lại.", "Cannot connect to TCP server. Please try again."));
     }
 
     void showError(Throwable e) {
@@ -603,42 +684,39 @@ public final class SocialWindow extends JFrame {
             invoke(() -> showError(e));
             return;
         }
-        Dialogs.notice(this, "Không thể hoàn tất", friendly(e), Dialogs.Kind.WARNING);
+        Dialogs.notice(this, tr("Không thể hoàn tất", "Action Failed"), friendly(e), Dialogs.Kind.WARNING);
     }
 
-    /** Short, non-blocking confirmation. Used for outcomes the user does not need to acknowledge. */
     void info(String s) {
         if (isShowing()) ModernUI.showToast(this, s, ModernUI.ToastType.SUCCESS);
     }
 
-    /** Non-blocking validation hint (amber), for input the user must correct. */
     void warn(String s) {
         if (isShowing()) ModernUI.showToast(this, s, ModernUI.ToastType.WARNING);
     }
 
     boolean confirm(String s) {
-        return Dialogs.confirm(this, "Xác nhận thao tác", s, "Xác nhận", true);
+        return Dialogs.confirm(this, tr("Xác nhận thao tác", "Confirm Action"), s, tr("Xác nhận", "Confirm"), true);
     }
 
-    void showAuth(boolean register) { authView.showAuth(register); }
-
+    void showAuth(boolean register) {
+        authRegisterMode = register;
+        authView.showAuth(register);
+    }
 
     static boolean isConnectionProblem(Throwable e) { return AuthView.isConnectionProblem(e); }
 
-
     JLabel smallLabel(String text) { return authView.smallLabel(text); }
-
 
     void addField(JPanel p, String name, Component input) { authView.addField(p, name, input); }
 
-
     static void styleAuthInput(JTextField input) { AuthView.styleAuthInput(input); }
 
-
     void setupUdp(Map<String, Object> login) {
-        if (udp != null) udp.close();
+        if (udp != null) { udp.close(); udp = null; }
         Map<String, Object> config = map(login.get("udp"));
         if (config.isEmpty()) config = new LinkedHashMap<>(login);
+        if (str(config, "udpKey").isBlank()) return;
         if (!config.containsKey("sessionId")) config.put("sessionId", login.get("sessionId"));
         udpExpiresAt = num(config, "keyExpiresAt");
         SocialClient expected = client;
@@ -651,7 +729,7 @@ public final class SocialWindow extends JFrame {
                     if (activeConversation == num(p, "conversationId") && typingLabel != null) {
                         long remaining = num(p, "expiresAt") - expected.serverTime();
                         if (bool(p, "typing") && remaining > 0) {
-                            typingLabel.setText("Người trò chuyện đang nhập tin nhắn…");
+                            typingLabel.setText(tr("Người trò chuyện đang nhập tin nhắn…", "Someone is typing…"));
                             typingExpiry.setInitialDelay((int) Math.min(5000, remaining));
                             typingExpiry.restart();
                         } else {
@@ -665,10 +743,11 @@ public final class SocialWindow extends JFrame {
                     if (client == expected && authenticated) {
                         udp = created;
                         udpRefresh.start();
+                        connection.setText(tr("Đã kết nối TCP · ", "TCP Connected · ") + host + ":" + port + " · UDP");
                     } else created.close();
                 });
             } catch (Exception ignored) {
-                /* UDP is disabled in the default TCP-only profile. */
+                /* UDP is optional if blocked by firewall. */
             }
         });
     }
@@ -680,15 +759,11 @@ public final class SocialWindow extends JFrame {
 
     void showMain() { shellView.showMain(); }
 
-
     void installShortcuts() { shellView.installShortcuts(); }
-
 
     JLabel navSection(String text) { return shellView.navSection(text); }
 
-
     NavItem navButton(String key, String text, AppIcon.Type iconType, Runnable action) { return shellView.navButton(key, text, iconType, action); }
-
 
     void logout() {
         query("AUTH_LOGOUT", of(), r -> {
@@ -698,6 +773,8 @@ public final class SocialWindow extends JFrame {
     }
 
     void clearSession() {
+        chatView.stopRecordingIfActive();
+        AudioPlayer.stop();
         convRefresh.stop();
         convPage = null;
         convPanelCache = null;
@@ -717,6 +794,10 @@ public final class SocialWindow extends JFrame {
         media = new MediaTransfers(() -> client, this::showError);
         messages.clear();
         pendingMessages.clear();
+        translations.clear();
+        translationPending.clear();
+        translationFailed.clear();
+        originalMessages.clear();
         resetBroadcast();
         pendingOwnerId = 0;
         currentUser.clear();
@@ -725,10 +806,15 @@ public final class SocialWindow extends JFrame {
 
     void disconnected(Throwable error) {
         authenticated = false;
+        chatView.stopRecordingIfActive();
         connection.setForeground(Theme.WARNING);
         connection.setIcon(new AppIcon(AppIcon.Type.DOT, Theme.WARNING, 10));
-        connection.setText("Mất kết nối · Dữ liệu có thể cũ · Đang thử kết nối lại TCP...");
-        if (udp != null) udp.close();
+        connection.setText(tr("Mất kết nối · Dữ liệu có thể cũ · Đang thử kết nối lại TCP...", "Disconnected · Data may be stale · Reconnecting TCP..."));
+        if (currentCall != null) {
+            currentCall.onCallEnded(tr("Mất kết nối máy chủ", "Disconnected from server"));
+            currentCall = null;
+        }
+        if (udp != null) { udp.close(); udp = null; }
         udpRefresh.stop();
         media.disconnected();
         if (chatInput != null) chatInput.setEnabled(false);
@@ -753,7 +839,8 @@ public final class SocialWindow extends JFrame {
                         invoke(() -> {
                             if (reconnectToken == token) {
                                 showAuth(false);
-                                info("Đã kết nối lại TCP thành công. Vui lòng đăng nhập lại; tin chưa gửi vẫn được lưu.");
+                                info(tr("Đã kết nối lại TCP thành công. Vui lòng đăng nhập lại; tin chưa gửi vẫn được lưu.",
+                                        "Reconnected to TCP server. Please sign in again; unsent messages are preserved."));
                             }
                         });
                         return;
@@ -769,7 +856,7 @@ public final class SocialWindow extends JFrame {
                 if (reconnectToken == token) {
                     connection.setForeground(Theme.DANGER);
                     connection.setIcon(new AppIcon(AppIcon.Type.DOT, Theme.DANGER, 10));
-                    connection.setText("Chưa kết nối · Bấm Đăng nhập lại để kết nối tiếp");
+                    connection.setText(tr("Chưa kết nối · Bấm Đăng nhập lại để kết nối tiếp", "Offline · Click Re-login to reconnect"));
                 }
             });
         });
@@ -804,29 +891,36 @@ public final class SocialWindow extends JFrame {
         switch (action) {
             case "INVITE" -> {
                 if (currentCall != null && currentCall.isDisplayable()) {
-                    query("CALL_SIGNAL", Map.of("action", "BUSY", "targetUserId", senderId, "conversationId", cid, "callId", callId), r -> {});
+                    if (!Objects.equals(callId, currentCall.getCallId())) {
+                        query("CALL_SIGNAL", Map.of("action", "BUSY", "targetUserId", senderId, "conversationId", cid, "callId", callId), r -> {});
+                    }
                     return;
                 }
                 currentCall = CallWindow.showIncoming(this, senderId, callerName, cid, udpPort, videoPort, senderHost, callId, isVideo);
             }
             case "ACCEPT" -> {
-                if (currentCall != null && currentCall.isDisplayable()) {
+                if (currentCall != null && currentCall.isDisplayable() && Objects.equals(callId, currentCall.getCallId())) {
                     currentCall.onAcceptedByPeer(senderHost, udpPort, videoPort);
                 }
             }
             case "REJECT" -> {
-                if (currentCall != null && currentCall.isDisplayable()) {
-                    currentCall.onCallRejected("Người dùng từ chối cuộc gọi");
+                if (currentCall != null && currentCall.isDisplayable() && Objects.equals(callId, currentCall.getCallId())) {
+                    currentCall.onCallRejected(tr("Người dùng từ chối cuộc gọi", "User declined the call"));
                 }
             }
             case "BUSY" -> {
-                if (currentCall != null && currentCall.isDisplayable()) {
-                    currentCall.onCallRejected("Người dùng đang bận");
+                if (currentCall != null && currentCall.isDisplayable() && Objects.equals(callId, currentCall.getCallId())) {
+                    currentCall.onCallRejected(tr("Người dùng đang bận trong cuộc gọi khác", "User is busy on another call"));
                 }
             }
             case "HANGUP" -> {
-                if (currentCall != null && currentCall.isDisplayable()) {
-                    currentCall.onCallEnded("Đối phương đã kết thúc cuộc gọi");
+                if (currentCall != null && currentCall.isDisplayable() && Objects.equals(callId, currentCall.getCallId())) {
+                    currentCall.onCallEnded(tr("Đối phương đã kết thúc cuộc gọi", "Peer ended the call"));
+                }
+            }
+            case "VIDEO_MODE" -> {
+                if (currentCall != null && currentCall.isDisplayable() && Objects.equals(callId, currentCall.getCallId())) {
+                    currentCall.onPeerVideoModeChanged(bool(p, "enabled"));
                 }
             }
         }
@@ -840,16 +934,16 @@ public final class SocialWindow extends JFrame {
         if (activeConversationData.isEmpty()) return;
         boolean isGroup = "GROUP".equals(str(activeConversationData, "kind", "type"));
         if (isGroup) {
-            info("Cuộc gọi nhóm P2P sẽ được hỗ trợ trong bản cập nhật tiếp theo");
+            info(tr("Cuộc gọi P2P hiện chỉ dành cho trò chuyện cá nhân 1–1", "P2P calls are currently supported for 1-on-1 direct chats"));
             return;
         }
         long otherId = num(activeConversationData, "otherUserId");
         if (otherId == 0) {
-            showError(new IllegalStateException("Không tìm thấy thông tin người nhận cuộc gọi"));
+            showError(new IllegalStateException(tr("Không tìm thấy thông tin người nhận cuộc gọi", "Recipient user ID not found")));
             return;
         }
         String otherName = str(activeConversationData, "title", "displayName", "otherUsername");
-        if (otherName.isBlank()) otherName = "Người dùng #" + otherId;
+        if (otherName.isBlank()) otherName = tr("Người dùng #", "User #") + otherId;
 
         if (currentCall != null && currentCall.isDisplayable()) {
             currentCall.toFront();
@@ -888,13 +982,13 @@ public final class SocialWindow extends JFrame {
         }
         if ("feed".equals(view) && Set.of("POST_INVALIDATED", "COMMENT_INVALIDATED", "LIKE_INVALIDATED").contains(type)) {
             if ("POST_INVALIDATED".equals(type) && System.currentTimeMillis() - ownPostMutationAt < 6000) {
-                // The change was made by this user a moment ago: reload instead of leaving a placeholder card.
                 eventRefresh.restart();
                 return;
             }
             if ("POST_INVALIDATED".equals(type)) invalidateVisiblePost(body, num(p, "postId"));
             connection.setIcon(new AppIcon(AppIcon.Type.DOT, Theme.SUCCESS, 10));
-            connection.setText("Đã kết nối TCP · Bảng tin có cập nhật mới · Bấm Đồng bộ / Làm mới để xem");
+            connection.setText(tr("Đã kết nối TCP · Bảng tin có cập nhật mới · Bấm Đồng bộ / Làm mới để xem",
+                    "TCP Connected · New feed updates available · Click Sync / Refresh to view"));
             return;
         }
         if ("MESSAGE_CREATED".equals(type)) {
@@ -904,6 +998,8 @@ public final class SocialWindow extends JFrame {
                 upsertMessage(m);
                 renderMessages(false);
                 ackMessages();
+            } else {
+                scheduleConversationRefresh();
             }
             return;
         }
@@ -931,7 +1027,7 @@ public final class SocialWindow extends JFrame {
                 long cid = activeConversation;
                 messages.clear();
                 chatMessages.removeAll();
-                chatMessages.add(label("Đang kiểm tra quyền truy cập cuộc trò chuyện…", false));
+                chatMessages.add(label(tr("Đang kiểm tra quyền truy cập cuộc trò chuyện…", "Verifying conversation access…"), false));
                 chatMessages.revalidate();
                 chatMessages.repaint();
                 chatInput.setEnabled(false);
@@ -945,7 +1041,7 @@ public final class SocialWindow extends JFrame {
             if ("POST_INVALIDATED".equals(type) || "RELATION_CHANGED".equals(type) || "CONVERSATION_INVALIDATED".equals(type)) {
                 if ("feed".equals(view) || "post".equals(view) || "profile".equals(view)) {
                     body.removeAll();
-                    body.add(label("Đang kiểm tra quyền và cập nhật dữ liệu…", false));
+                    body.add(label(tr("Đang kiểm tra quyền và cập nhật dữ liệu…", "Checking permissions and updating…"), false));
                     body.revalidate();
                     body.repaint();
                 }
@@ -970,7 +1066,8 @@ public final class SocialWindow extends JFrame {
             if (component instanceof JPanel panel && Objects.equals(panel.getClientProperty("postId"), postId)) {
                 int oldHeight = panel.getHeight();
                 panel.removeAll();
-                panel.add(readable("Bài viết đã thay đổi. Làm mới bảng tin để kiểm tra quyền và xem nội dung mới."));
+                panel.add(readable(tr("Bài viết đã thay đổi. Làm mới bảng tin để kiểm tra quyền và xem nội dung mới.",
+                        "This post has changed. Refresh the feed to verify permissions and view updated content.")));
                 panel.setMinimumSize(new Dimension(0, Math.min(oldHeight, 100)));
                 panel.revalidate();
                 panel.repaint();
@@ -985,14 +1082,15 @@ public final class SocialWindow extends JFrame {
         final boolean compact = compactNext;
         final JPanel panel = new JPanel(new BorderLayout(0, 0));
         final JPanel list = new StackPanel(true);
-        final JLabel status = label("Đang tải dữ liệu…", false);
+        final JLabel status = label(tr("Đang tải dữ liệu…", "Loading data…"), false);
         final JButton more;
         final String type;
         final Map<String, Object> base;
         final Function<Map<String, Object>, JComponent> render;
         String cursor;
-        String emptyTitle = "Chưa có nội dung nào";
-        String emptyHint = "Danh sách hiện tại đang trống. Hãy quay lại sau!";
+        String throughCursor;
+        String emptyTitle = tr("Chưa có nội dung nào", "Nothing here yet");
+        String emptyHint = tr("Danh sách hiện tại đang trống. Hãy quay lại sau!", "This list is currently empty.");
         AppIcon.Type emptyIcon = AppIcon.Type.FILE;
         boolean loading;
         int epoch;
@@ -1011,7 +1109,7 @@ public final class SocialWindow extends JFrame {
             status.setFont(Theme.font(Font.PLAIN, 12));
             status.setForeground(Theme.MUTED);
             status.setBorder(null);
-            more = ghost("Tải thêm", () -> load(false));
+            more = ghost(tr("Tải thêm", "Load more"), () -> load(false));
             if (compact) {
                 more.setFont(Theme.font(Font.PLAIN, 12));
                 JPanel compactFooter = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
@@ -1019,20 +1117,20 @@ public final class SocialWindow extends JFrame {
                 compactFooter.add(more);
                 panel.add(compactFooter, BorderLayout.SOUTH);
             } else {
-            JPanel footer = new JPanel(new BorderLayout(8, 0));
-            footer.setOpaque(false);
-            footer.setBorder(new EmptyBorder(8, 24, 8, 24));
-            JPanel footerActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-            footerActions.setOpaque(false);
-            footerActions.add(ghost("Làm mới", new AppIcon(AppIcon.Type.REFRESH, Theme.TEXT_SECONDARY, 14), () -> load(true)));
-            footerActions.add(more);
-            footer.add(status, BorderLayout.CENTER);
-            footer.add(footerActions, BorderLayout.EAST);
-            JPanel footerBar = new JPanel(new BorderLayout());
-            footerBar.setBackground(Theme.APP_BACKGROUND);
-            footerBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER));
-            footerBar.add(centered(footer, Theme.COLUMN_WIDTH + 48));
-            panel.add(footerBar, BorderLayout.SOUTH);
+                JPanel footer = new JPanel(new BorderLayout(8, 0));
+                footer.setOpaque(false);
+                footer.setBorder(new EmptyBorder(8, 24, 8, 24));
+                JPanel footerActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+                footerActions.setOpaque(false);
+                footerActions.add(ghost(tr("Làm mới", "Refresh"), new AppIcon(AppIcon.Type.REFRESH, Theme.TEXT_SECONDARY, 14), () -> load(true)));
+                footerActions.add(more);
+                footer.add(status, BorderLayout.CENTER);
+                footer.add(footerActions, BorderLayout.EAST);
+                JPanel footerBar = new JPanel(new BorderLayout());
+                footerBar.setBackground(Theme.APP_BACKGROUND);
+                footerBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER));
+                footerBar.add(centered(footer, Theme.COLUMN_WIDTH + 48));
+                panel.add(footerBar, BorderLayout.SOUTH);
             }
             compactNext = false;
         }
@@ -1040,7 +1138,7 @@ public final class SocialWindow extends JFrame {
         void load(boolean reset) {
             if (loading) return;
             if ("USER_SEARCH".equals(type) && str(base, "query").trim().length() < 2) {
-                status.setText("Nhập ít nhất 2 ký tự để tìm kiếm người dùng.");
+                status.setText(tr("Nhập ít nhất 2 ký tự để tìm kiếm người dùng.", "Enter at least 2 characters to search users."));
                 return;
             }
             loading = true;
@@ -1050,7 +1148,7 @@ public final class SocialWindow extends JFrame {
             if (reset) {
                 cursor = null;
                 list.removeAll();
-                status.setText("Đang tải…");
+                status.setText(tr("Đang tải…", "Loading…"));
             }
             Map<String, Object> request = new LinkedHashMap<>(base);
             request.put("limit", 20);
@@ -1060,12 +1158,15 @@ public final class SocialWindow extends JFrame {
                 if (token != epoch || session != generation) return;
                 loading = false;
                 if (error != null) {
-                    status.setText("Không tải được dữ liệu · Bấm Làm mới để thử lại");
+                    status.setText(tr("Không tải được dữ liệu · Bấm Làm mới để thử lại", "Failed to load · Click Refresh to retry"));
                     more.setEnabled(true);
                     showError(error);
                     return;
                 }
                 if (list.getComponentCount() >= 120) list.removeAll();
+                if (!str(result, "throughCursor").isBlank()) {
+                    throughCursor = str(result, "throughCursor");
+                }
                 List<Map<String, Object>> items = rows(result.get("items"));
                 for (Map<String, Object> row : items) {
                     JComponent rendered = render.apply(row);
@@ -1086,14 +1187,17 @@ public final class SocialWindow extends JFrame {
                 more.setEnabled(bool(result, "hasMore") || !cursor.isBlank());
                 if (compact) more.setVisible(more.isEnabled());
                 if (items.isEmpty() && list.getComponentCount() == 0) {
-                    status.setText("Chưa có nội dung.");
+                    status.setText(tr("Chưa có nội dung.", "No items."));
                     if ("COMMENT_LIST".equals(type)) {
-                        list.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.CHAT, Theme.MUTED, 36), "Chưa có bình luận", "Hãy là người đầu tiên chia sẻ ý kiến về bài viết này."));
+                        list.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.CHAT, Theme.MUTED, 36),
+                                tr("Chưa có bình luận", "No comments yet"),
+                                tr("Hãy là người đầu tiên chia sẻ ý kiến về bài viết này.", "Be the first to share your thoughts on this post.")));
                     } else {
                         list.add(ModernUI.emptyState(new AppIcon(emptyIcon, Theme.MUTED, 30), emptyTitle, emptyHint));
                     }
                 } else {
-                    status.setText("Đã tải " + items.size() + " mục · Giờ theo thiết bị của bạn");
+                    status.setText(tr("Đã tải " + items.size() + " mục · Giờ theo thiết bị của bạn",
+                            "Loaded " + items.size() + " items · Local device time"));
                 }
                 list.revalidate();
                 list.repaint();
@@ -1103,21 +1207,15 @@ public final class SocialWindow extends JFrame {
 
     void showFeed() { feedView.showFeed(); }
 
-
     JComponent feedContext() { return feedView.feedContext(); }
-
 
     JButton fullWidthButton(String text, Runnable action) { return feedView.fullWidthButton(text, action); }
 
-
     JComponent friendRow(Map<String, Object> user, long uid, Map<Long, Theme.Avatar> faces, Map<Long, JLabel> states) { return feedView.friendRow(user, uid, faces, states); }
-
 
     JComponent postCard(Map<String, Object> post) { return feedView.postCard(post); }
 
-
     JButton authorLink(String text, Runnable action) { return feedView.authorLink(text, action); }
-
 
     JLabel muted(String text) {
         JLabel l = new JLabel(text);
@@ -1129,14 +1227,10 @@ public final class SocialWindow extends JFrame {
 
     String visibility(String code) { return feedView.visibility(code); }
 
-
     void composePost(Map<String, Object> existing) { feedView.composePost(existing); }
-
 
     void showPost(long postId) { feedView.showPost(postId); }
 
-
-    /** Dialog footer: optional left-hand tools, then secondary actions and the primary action on the right. */
     JPanel actionRow(JComponent left, JButton secondary, JButton primaryAction) {
         JPanel row = new JPanel(new BorderLayout(12, 0));
         row.setOpaque(false);
@@ -1163,88 +1257,58 @@ public final class SocialWindow extends JFrame {
 
     void showPeople() { peopleView.showPeople(); }
 
-
     Map<String, Object> relationUser(Map<String, Object> r) { return peopleView.relationUser(r); }
-
-
-
 
     void updatePresence(Container parent, long userId, boolean online, long asOf) { peopleView.updatePresence(parent, userId, online, asOf); }
 
-
-
-
     void block(long uid, boolean blocked) { peopleView.block(uid, blocked); }
-
 
     void showProfile(long uid) { profileView.showProfile(uid); }
 
-
     void showSettings() { profileView.showSettings(); }
-
 
     void openDirect(long target) { chatView.openDirect(target); }
 
-
     void receiveBroadcast(Map<String, Object> p) { broadcastView.receiveBroadcast(p); }
-
 
     void resetBroadcast() { broadcastView.resetBroadcast(); }
 
-
     void showBroadcast() { broadcastView.showBroadcast(); }
-
 
     void sendBroadcast(JTextArea input, JButton send, JLabel status) { broadcastView.sendBroadcast(input, send, status); }
 
-
     void renderBroadcasts() { broadcastView.renderBroadcasts(); }
-
 
     void showConversations() { messagesView.showConversations(); }
 
-
     JPanel messagesShell(JComponent center) { return messagesView.messagesShell(center); }
-
 
     void buildConversationList() { messagesView.buildConversationList(); }
 
-
     JComponent conversationRow(Map<String, Object> conv) { return messagesView.conversationRow(conv); }
-
 
     String shortStamp(long epochMillis) { return messagesView.shortStamp(epochMillis); }
 
-
     void showGroupInvites() { messagesView.showGroupInvites(); }
-
 
     JComponent chatContext(Map<String, Object> conv) { return messagesView.chatContext(conv); }
 
-
     JLabel contextHeading(String text) { return messagesView.contextHeading(text); }
-
 
     JComponent fullWidth(JComponent c) { return messagesView.fullWidth(c); }
 
-
     void createGroup() { messagesView.createGroup(); }
-
 
     void openChat(Map<String, Object> conv) { chatView.openChat(conv); }
 
-
     void loadHistory(boolean older) { chatView.loadHistory(older); }
-
 
     void syncChat(long cid) { chatView.syncChat(cid); }
 
-
     final javax.swing.Timer convRefresh = new javax.swing.Timer(700, e -> {
-        if (authenticated && convPage != null && ("chat".equals(view) || "conversations".equals(view))) convPage.load(true);
+        if (authenticated && convPage != null && ("chat".equals(view) || "conversations".equals(view) || "publicGroups".equals(view))) convPage.load(true);
     });
 
-    /** Keeps the conversation list (order, unread chips, activity time) in step with incoming and sent messages. */
     void scheduleConversationRefresh() {
         if (convPage == null) return;
         convRefresh.setRepeats(false);
@@ -1253,81 +1317,74 @@ public final class SocialWindow extends JFrame {
 
     void upsertMessage(Map<String, Object> m) { chatView.upsertMessage(m); }
 
-
     int statusRank(String s) { return chatView.statusRank(s); }
-
 
     void ackMessages() { chatView.ackMessages(); }
 
-
     String translationKey(Map<String, Object> message) { return chatView.translationKey(message); }
-
 
     void requestTranslation(Map<String, Object> message) { chatView.requestTranslation(message); }
 
-
     JComponent translatedMessage(Map<String, Object> message) { return chatView.translatedMessage(message); }
-
 
     void renderMessages(boolean bottom) { chatView.renderMessages(bottom); }
 
-
     String messageStatus(String status) { return chatView.messageStatus(status); }
-
 
     void sendMessage(long cid, String mediaId, String content) { chatView.sendMessage(cid, mediaId, content); }
 
-
     void submitMessage(PendingMessage p) { chatView.submitMessage(p); }
-
 
     void retryMessage(PendingMessage p) { chatView.retryMessage(p); }
 
-
     void groupInfo(Map<String, Object> original) { messagesView.groupInfo(original); }
-
 
     void selectFriend(LongConsumer selection) { messagesView.selectFriend(selection); }
 
-
     void showNotifications() { notificationsView.showNotifications(); }
-
 
     String notificationTitle(String type) { return notificationsView.notificationTitle(type); }
 
-
     String roleText(String role) {
-        return switch (role) { case "OWNER" -> "Chủ nhóm"; case "MEMBER" -> "Thành viên"; case "ADMIN" -> "Quản trị viên"; default -> role; };
+        return switch (role) {
+            case "OWNER" -> tr("Chủ nhóm", "Owner");
+            case "MEMBER" -> tr("Thành viên", "Member");
+            case "ADMIN" -> tr("Quản trị viên", "Admin");
+            default -> role;
+        };
     }
 
     String targetText(String type) {
-        return switch (type) { case "POST" -> "Bài viết"; case "COMMENT" -> "Bình luận"; case "USER" -> "Người dùng"; case "MESSAGE" -> "Tin nhắn"; default -> type; };
+        return switch (type) {
+            case "POST" -> tr("Bài viết", "Post");
+            case "COMMENT" -> tr("Bình luận", "Comment");
+            case "USER" -> tr("Người dùng", "User");
+            case "MESSAGE" -> tr("Tin nhắn", "Message");
+            default -> type;
+        };
     }
 
     String statusText(String status) {
         return switch (status) {
-            case "OPEN", "PENDING" -> "Đang chờ";
-            case "CLAIMED", "IN_REVIEW" -> "Đang xử lý";
-            case "RESOLVED" -> "Đã giải quyết";
-            case "DISMISSED" -> "Đã bỏ qua";
-            case "ACCEPTED" -> "Đã chấp nhận";
-            case "REJECTED" -> "Đã từ chối";
-            case "CANCELLED" -> "Đã hủy";
+            case "OPEN", "PENDING" -> tr("Đang chờ", "Pending");
+            case "CLAIMED", "IN_REVIEW" -> tr("Đang xử lý", "In Review");
+            case "RESOLVED" -> tr("Đã giải quyết", "Resolved");
+            case "DISMISSED" -> tr("Đã bỏ qua", "Dismissed");
+            case "ACCEPTED" -> tr("Đã chấp nhận", "Accepted");
+            case "REJECTED" -> tr("Đã từ chối", "Rejected");
+            case "CANCELLED" -> tr("Đã hủy", "Cancelled");
+            case "EXPIRED" -> tr("Đã hết hạn", "Expired");
             default -> status;
         };
     }
 
     void report(String type, long target) { reportView.report(type, target); }
 
-
     void showAdmin() { adminView.showAdmin(); }
-
 
     void reviewReport(long reportId) { adminView.reviewReport(reportId); }
 
-
     void showRecord(String title, Map<String, Object> record) { adminView.showRecord(title, record); }
-
 
     String recordText(Map<String, Object> data) {
         StringBuilder b = new StringBuilder();

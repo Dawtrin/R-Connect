@@ -1,41 +1,29 @@
 package com.p2p.client.ui.social;
 
-import com.p2p.client.network.social.*;
 import com.p2p.client.ui.AppIcon;
-import com.p2p.client.ui.Brand;
 import com.p2p.client.ui.Dialogs;
 import com.p2p.client.ui.ModernUI;
-import com.p2p.client.ui.NavItem;
 import com.p2p.client.ui.Theme;
-import com.p2p.common.social.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.RoundRectangle2D;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.*;
-import java.util.function.*;
-import java.util.prefs.Preferences;
 import static com.p2p.client.ui.social.Values.*;
 import com.p2p.client.ui.social.SocialWindow.Page;
 
-/** FeedView screen. Extracted from SocialWindow; behaviour is unchanged. */
+/** FeedView screen: News feed, inline/modal post composer with server version diff, and post comments. */
 final class FeedView extends ViewSupport {
     FeedView(SocialWindow app) { super(app); }
 
-    // ================= FEED =================
     void showFeed() {
-        Page p = app.new Page("Bảng tin", "FEED_GET", of(), this::postCard);
+        Page p = app.new Page(tr("Bảng tin", "News Feed"), "FEED_GET", of(), this::postCard);
         p.emptyIcon = AppIcon.Type.FEED;
-        p.emptyTitle = "Chưa có bài viết nào";
-        p.emptyHint = "Hãy là người đầu tiên chia sẻ điều gì đó.";
+        p.emptyTitle = tr("Chưa có bài viết nào", "No posts yet");
+        p.emptyHint = tr("Hãy là người đầu tiên chia sẻ điều gì đó.", "Be the first to share something with everyone.");
 
-        // Inline composer sits directly under the page title; it opens the real post editor.
         JPanel composer = card();
         composer.putClientProperty("CardPanel.fillWidth", false);
         composer.setLayout(new BorderLayout(12, 0));
@@ -43,14 +31,14 @@ final class FeedView extends ViewSupport {
         JPanel own = new JPanel(new GridBagLayout());
         own.setOpaque(false);
         own.add(avatar(app.currentUser, 38));
-        JButton prompt = Theme.secondaryButton("Bạn muốn chia sẻ điều gì?");
+        JButton prompt = Theme.secondaryButton(tr("Bạn muốn chia sẻ điều gì?", "What's on your mind?"));
         prompt.setFont(Theme.font(Font.PLAIN, 14));
         prompt.setForeground(Theme.MUTED);
         prompt.setHorizontalAlignment(SwingConstants.LEFT);
         prompt.putClientProperty("FlatLaf.style", prompt.getClientProperty("FlatLaf.style") + "; arc:20; margin:9,16,9,16");
-        prompt.getAccessibleContext().setAccessibleName("Soạn bài viết mới");
+        prompt.getAccessibleContext().setAccessibleName(tr("Soạn bài viết mới", "Compose new post"));
         prompt.addActionListener(e -> composePost(null));
-        JButton share = primary("Chia sẻ", () -> composePost(null));
+        JButton share = primary(tr("Chia sẻ", "Share"), () -> composePost(null));
         composer.add(own, BorderLayout.WEST);
         composer.add(prompt, BorderLayout.CENTER);
         composer.add(share, BorderLayout.EAST);
@@ -73,7 +61,6 @@ final class FeedView extends ViewSupport {
         p.load(true);
     }
 
-    /** Right-hand panel of the feed: your profile summary, friends with live presence, pending requests. */
     JComponent feedContext() {
         JPanel p = vertical();
         p.setBorder(new EmptyBorder(26, 20, 20, 20));
@@ -96,7 +83,9 @@ final class FeedView extends ViewSupport {
         who.putClientProperty("html.disable", Boolean.TRUE);
         JLabel handle = muted("@" + str(app.currentUser, "username"));
         handle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JLabel role = ModernUI.chip("ADMIN".equals(str(app.currentUser, "role")) ? "QUẢN TRỊ VIÊN" : "THÀNH VIÊN", ModernUI.Tone.NEUTRAL);
+        JLabel role = ModernUI.chip("ADMIN".equals(str(app.currentUser, "role"))
+                ? tr("QUẢN TRỊ VIÊN", "ADMIN")
+                : tr("THÀNH VIÊN", "MEMBER"), ModernUI.Tone.NEUTRAL);
         role.setAlignmentX(Component.CENTER_ALIGNMENT);
         inner.add(face);
         inner.add(Box.createVerticalStrut(12));
@@ -108,15 +97,15 @@ final class FeedView extends ViewSupport {
         head.add(inner);
         p.add(head);
         p.add(Box.createVerticalStrut(14));
-        p.add(fullWidth(button("Hồ sơ của tôi", () -> showProfile(me))));
+        p.add(fullWidth(button(tr("Hồ sơ của tôi", "My Profile"), () -> showProfile(me))));
 
         p.add(Box.createVerticalStrut(26));
-        p.add(contextHeading("BẠN BÈ"));
+        p.add(contextHeading(tr("BẠN BÈ", "FRIENDS")));
         JPanel friends = new JPanel();
         friends.setOpaque(false);
         friends.setLayout(new BoxLayout(friends, BoxLayout.Y_AXIS));
         friends.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel loading = muted("Đang tải…");
+        JLabel loading = muted(tr("Đang tải…", "Loading…"));
         friends.add(loading);
         p.add(friends);
 
@@ -132,7 +121,8 @@ final class FeedView extends ViewSupport {
             friends.removeAll();
             List<Map<String, Object>> items = rows(r.get("items"));
             if (items.isEmpty()) {
-                JTextArea none = readable("Chưa có bạn bè. Dùng mục “Bạn bè & Tìm người” để kết nối.");
+                JTextArea none = readable(tr("Chưa có bạn bè. Dùng mục “Bạn bè & Tìm người” để kết nối.",
+                        "No friends yet. Open “Friends & Search” to connect with people."));
                 none.setForeground(Theme.MUTED);
                 none.setAlignmentX(Component.LEFT_ALIGNMENT);
                 friends.add(none);
@@ -158,7 +148,7 @@ final class FeedView extends ViewSupport {
                         JLabel s = states.get(uid);
                         if (f != null) f.setOnline(online);
                         if (s != null) {
-                            s.setText(online ? "Đang online" : "Offline");
+                            s.setText(online ? tr("Đang online", "Online") : "Offline");
                             s.setForeground(online ? Theme.ONLINE : Theme.MUTED);
                         }
                     }
@@ -173,9 +163,9 @@ final class FeedView extends ViewSupport {
                 JPanel box = new JPanel();
                 box.setOpaque(false);
                 box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
-                JLabel h = contextHeading("LỜI MỜI ĐANG CHỜ");
+                JLabel h = contextHeading(tr("LỜI MỜI ĐANG CHỜ", "PENDING REQUESTS"));
                 box.add(h);
-                JButton open = fullWidthButton(count + " lời mời kết bạn · Xem", () -> app.peopleView.openMode("INCOMING"));
+                JButton open = fullWidthButton(count + tr(" lời mời kết bạn · Xem", " friend requests · View"), () -> app.peopleView.openMode("INCOMING"));
                 box.add(open);
                 pending.add(box);
                 pending.revalidate();
@@ -211,7 +201,7 @@ final class FeedView extends ViewSupport {
         nm.setFont(Theme.font(Font.PLAIN, 13));
         nm.setForeground(Theme.TEXT);
         nm.putClientProperty("html.disable", Boolean.TRUE);
-        JLabel st = new JLabel("Đang cập nhật…");
+        JLabel st = new JLabel(tr("Đang cập nhật…", "Checking…"));
         st.setFont(Theme.font(Font.PLAIN, 11));
         st.setForeground(Theme.MUTED);
         states.put(uid, st);
@@ -221,7 +211,7 @@ final class FeedView extends ViewSupport {
         texts.add(nm);
         texts.add(st);
         row.add(texts, BorderLayout.CENTER);
-        row.getAccessibleContext().setAccessibleName("Hồ sơ " + name(user));
+        row.getAccessibleContext().setAccessibleName(tr("Hồ sơ ", "Profile ") + name(user));
         return row;
     }
 
@@ -236,7 +226,6 @@ final class FeedView extends ViewSupport {
         }
         Map<String, Object> profile = author;
 
-        // Post Header
         JPanel postHeader = new JPanel(new BorderLayout(8, 0));
         postHeader.setOpaque(false);
         JPanel authorBox = horizontal(
@@ -248,7 +237,7 @@ final class FeedView extends ViewSupport {
         c.add(postHeader, BorderLayout.NORTH);
 
         if (bool(post, "unavailable") || "HIDDEN".equals(str(post, "status"))) {
-            c.add(readable("Bài viết đã bị ẩn.\n" + str(post, "moderationReason")));
+            c.add(readable(tr("Bài viết đã bị ẩn.\n", "This post has been hidden by moderation.\n") + str(post, "moderationReason")));
             return c;
         }
 
@@ -273,23 +262,23 @@ final class FeedView extends ViewSupport {
         }
         c.add(content, BorderLayout.CENTER);
 
-        // Actions
         boolean liked = bool(post, "liked");
-        JButton like = ghost((liked ? "Đã thích" : "Thích") + " (" + num(post, "likeCount") + ")", () -> {});
+        JButton like = ghost((liked ? tr("Đã thích", "Liked") : tr("Thích", "Like")) + " (" + num(post, "likeCount") + ")", () -> {});
         like.setIcon(new AppIcon(liked ? AppIcon.Type.HEART_FILL : AppIcon.Type.HEART, liked ? Theme.LIKE : Theme.TEXT_SECONDARY, 15));
         if (liked) like.setForeground(Theme.LIKE);
         like.addActionListener(e -> mutate("LIKE_SET", of("postId", postId, "liked", !liked), like, r -> app.refreshCurrent.run()));
 
-        JButton commentBtn = ghost("Bình luận (" + num(post, "commentCount") + ")", new AppIcon(AppIcon.Type.CHAT, Theme.TEXT_SECONDARY, 15), () -> showPost(postId));
-        JButton reportBtn = ghost("Báo cáo", new AppIcon(AppIcon.Type.SHIELD, Theme.TEXT_SECONDARY, 15), () -> report("POST", postId));
+        JButton commentBtn = ghost(tr("Bình luận", "Comments") + " (" + num(post, "commentCount") + ")",
+                new AppIcon(AppIcon.Type.CHAT, Theme.TEXT_SECONDARY, 15), () -> showPost(postId));
+        JButton reportBtn = ghost(tr("Báo cáo", "Report"), new AppIcon(AppIcon.Type.SHIELD, Theme.TEXT_SECONDARY, 15), () -> report("POST", postId));
 
         JPanel actions = horizontal(like, commentBtn, reportBtn);
         actions.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER), new EmptyBorder(6, 0, 0, 0)));
         if (num(post, "authorId") == id(app.currentUser, "user") || id(author, "user") == id(app.currentUser, "user")) {
-            actions.add(ghost("Sửa", () -> composePost(post)));
-            actions.add(ghost("Xóa", () -> {
-                if (confirm("Bạn có chắc muốn xóa bài viết này?")) {
+            actions.add(ghost(tr("Sửa", "Edit"), () -> composePost(post)));
+            actions.add(ghost(tr("Xóa", "Delete"), () -> {
+                if (confirm(tr("Bạn có chắc muốn xóa bài viết này?", "Are you sure you want to delete this post?"))) {
                     mutate("POST_DELETE", of("postId", postId, "expectedVersion", num(post, "version")), null, r -> app.refreshCurrent.run());
                 }
             }));
@@ -298,7 +287,6 @@ final class FeedView extends ViewSupport {
         return c;
     }
 
-    /** Author name rendered as a quiet text link (no button chrome). */
     JButton authorLink(String text, Runnable action) {
         JButton b = ghost(text, action);
         b.setFont(Theme.font(Font.BOLD, 14));
@@ -309,15 +297,15 @@ final class FeedView extends ViewSupport {
 
     String visibility(String code) {
         return switch (code) {
-            case "PUBLIC" -> "Công khai";
-            case "ONLY_ME" -> "Chỉ mình tôi";
-            default -> "Bạn bè";
+            case "PUBLIC" -> tr("Công khai", "Public");
+            case "ONLY_ME" -> tr("Chỉ mình tôi", "Only me");
+            default -> tr("Bạn bè", "Friends");
         };
     }
 
     void composePost(Map<String, Object> existing) {
         Map<String, Object> editing = existing == null ? null : new LinkedHashMap<>(existing);
-        JDialog d = dialog(existing == null ? "Chia sẻ bài viết mới" : "Chỉnh sửa bài viết", 640, 500);
+        JDialog d = dialog(existing == null ? tr("Chia sẻ bài viết mới", "Compose New Post") : tr("Chỉnh sửa bài viết", "Edit Post"), 640, 500);
         JPanel p = vertical();
         JTextArea content = text(existing == null ? "" : str(existing, "content"), 8);
         JComboBox<String> privacy = new JComboBox<>(new String[]{"FRIENDS", "PUBLIC", "ONLY_ME"});
@@ -328,11 +316,11 @@ final class FeedView extends ViewSupport {
         });
         if (existing != null) privacy.setSelectedItem(str(existing, "visibility"));
 
-        JLabel composeTitle = label("Bạn muốn chia sẻ điều gì với mọi người?", true);
+        JLabel composeTitle = label(tr("Bạn muốn chia sẻ điều gì với mọi người?", "What would you like to share?"), true);
         composeTitle.setFont(Theme.font(Font.BOLD, 15));
         p.add(composeTitle);
         p.add(Box.createVerticalStrut(10));
-        content.putClientProperty("JTextField.placeholderText", "Chia sẻ điều bạn đang nghĩ…");
+        content.putClientProperty("JTextField.placeholderText", tr("Chia sẻ điều bạn đang nghĩ…", "Write your post here…"));
         p.add(framed(content));
         JLabel counter = muted(content.getText().length() + " / 5.000");
         counter.setAlignmentX(Component.RIGHT_ALIGNMENT);
@@ -342,47 +330,47 @@ final class FeedView extends ViewSupport {
         counterRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         counterRow.add(counter, BorderLayout.EAST);
         p.add(counterRow);
-        content.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+        content.getDocument().addDocumentListener(new DocumentListener() {
             void apply() {
                 int n = content.getText().length();
                 counter.setText(n + " / 5.000");
                 counter.setForeground(n > 5000 ? Theme.DANGER : Theme.MUTED);
             }
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { apply(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { apply(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { apply(); }
+            public void insertUpdate(DocumentEvent e) { apply(); }
+            public void removeUpdate(DocumentEvent e) { apply(); }
+            public void changedUpdate(DocumentEvent e) { apply(); }
         });
-        addField(p, "Quyền xem bài viết", privacy);
+        addField(p, tr("Quyền xem bài viết", "Visibility"), privacy);
 
         List<String> ids = new ArrayList<>();
         JPanel attachments = vertical();
         p.add(attachments);
-        JButton submit = Theme.primaryButton(existing == null ? "Đăng bài" : "Lưu thay đổi");
+        JButton submit = Theme.primaryButton(existing == null ? tr("Đăng bài", "Publish") : tr("Lưu thay đổi", "Save Changes"));
         int[] uploading = {0};
 
-        JButton image = button("Thêm ảnh (tối đa 4)", () -> {
+        JButton image = button(tr("Thêm ảnh (tối đa 4)", "Add photo (max 4)"), () -> {
             if (ids.size() + uploading[0] >= 4) {
-                warn("Chỉ có thể đính kèm tối đa 4 ảnh.");
+                warn(tr("Chỉ có thể đính kèm tối đa 4 ảnh.", "You can attach up to 4 photos."));
                 return;
             }
             JFileChooser chooser = new JFileChooser();
             if (chooser.showOpenDialog(d) != JFileChooser.APPROVE_OPTION) return;
             uploading[0]++;
             submit.setEnabled(false);
-            JLabel pending = label("Đang tải ảnh lên máy chủ…", false);
+            JLabel pending = label(tr("Đang tải ảnh lên máy chủ…", "Uploading photo…"), false);
             attachments.add(pending);
             attachments.revalidate();
             app.media.upload(d, chooser.getSelectedFile().toPath(), "POST_IMAGE", mediaId -> {
                 uploading[0]--;
                 ids.add(mediaId);
                 attachments.remove(pending);
-                attachments.add(horizontal(label("Ảnh #" + mediaId + " đã sẵn sàng", false), button("Bỏ ảnh", () -> {
-                    ids.remove(mediaId);
-                    pending.setText("Đã bỏ ảnh #" + mediaId);
-                    attachments.removeAll();
-                    for (String id : ids) attachments.add(label("Ảnh #" + id, false));
-                    attachments.revalidate();
-                })));
+                attachments.add(horizontal(label(tr("Ảnh #", "Photo #") + mediaId + tr(" đã sẵn sàng", " ready"), false),
+                        button(tr("Bỏ ảnh", "Remove"), () -> {
+                            ids.remove(mediaId);
+                            attachments.removeAll();
+                            for (String id : ids) attachments.add(label(tr("Ảnh #", "Photo #") + id, false));
+                            attachments.revalidate();
+                        })));
                 attachments.revalidate();
                 submit.setEnabled(uploading[0] == 0);
             });
@@ -390,12 +378,14 @@ final class FeedView extends ViewSupport {
         if (existing != null) image.setVisible(false);
 
         submit.addActionListener(e -> {
-            if (content.getText().isBlank() && ids.isEmpty() && existing == null) {
-                warn("Vui lòng nhập nội dung hoặc đính kèm ảnh.");
+            boolean hasExistingImages = editing != null && (!rows(editing.get("media")).isEmpty()
+                    || (editing.get("mediaIds") instanceof Collection<?> col && !col.isEmpty()));
+            if (content.getText().isBlank() && ids.isEmpty() && !hasExistingImages) {
+                warn(tr("Vui lòng nhập nội dung hoặc đính kèm ảnh.", "Please enter text content or attach a photo."));
                 return;
             }
             if (content.getText().length() > 5000) {
-                warn("Bài viết tối đa 5.000 ký tự.");
+                warn(tr("Bài viết tối đa 5.000 ký tự.", "Post cannot exceed 5,000 characters."));
                 return;
             }
             Map<String, Object> payload = existing == null
@@ -408,27 +398,32 @@ final class FeedView extends ViewSupport {
             });
         });
 
-        JButton review = button("Đối chiếu phiên bản máy chủ", () -> query("POST_GET", of("postId", id(editing, "post")), r -> {
+        JButton review = button(tr("Đối chiếu phiên bản máy chủ", "Check Server Version"), () -> query("POST_GET", of("postId", id(editing, "post")), r -> {
             Map<String, Object> latest = map(r.get("post"));
             if (latest.isEmpty()) latest = r;
             if (bool(latest, "unavailable")) {
-                warn("Bài viết không còn khả dụng để chỉnh sửa.");
+                warn(tr("Bài viết không còn khả dụng để chỉnh sửa.", "Post is no longer available for editing."));
                 return;
             }
             JPanel preview = vertical();
-            preview.add(label("Phiên bản máy chủ v" + num(latest, "version") + " · " + visibility(str(latest, "visibility")), false));
+            preview.add(label(tr("Phiên bản máy chủ v", "Server version v") + num(latest, "version") + " · " + visibility(str(latest, "visibility")), false));
             preview.add(scroll(readable(str(latest, "content"))));
             preview.setPreferredSize(new Dimension(420, 200));
-            if (Dialogs.confirmContent(d, "Dùng phiên bản máy chủ để thay nội dung đang sửa?", preview, "Dùng phiên bản này")) {
+            if (Dialogs.confirmContent(d,
+                    tr("Dùng phiên bản máy chủ để thay nội dung đang sửa?", "Replace editor content with latest server version?"),
+                    preview,
+                    tr("Dùng phiên bản này", "Use Server Version"))) {
                 editing.clear();
                 editing.putAll(latest);
-                info("Đã cập nhật phiên bản đối chiếu.");
+                content.setText(str(latest, "content"));
+                privacy.setSelectedItem(str(latest, "visibility"));
+                info(tr("Đã cập nhật nội dung và phiên bản từ máy chủ.", "Updated editor with latest server version."));
             }
         }));
         review.setVisible(existing != null);
 
         p.add(Box.createVerticalStrut(10));
-        p.add(actionRow(horizontal(image, review), button("Đóng", d::dispose), submit));
+        p.add(actionRow(horizontal(image, review), button(tr("Đóng", "Close"), d::dispose), submit));
         d.add(p);
         d.setVisible(true);
     }
@@ -439,13 +434,13 @@ final class FeedView extends ViewSupport {
 
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
-        JButton back = ghost("Bảng tin", new AppIcon(AppIcon.Type.FEED, Theme.TEXT_SECONDARY, 15), this::showFeed);
-        top.add(centered(titled("Bài viết", back), Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
+        JButton back = ghost(tr("Bảng tin", "News Feed"), new AppIcon(AppIcon.Type.FEED, Theme.TEXT_SECONDARY, 15), this::showFeed);
+        top.add(centered(titled(tr("Bài viết", "Post"), back), Theme.COLUMN_WIDTH + 48), BorderLayout.NORTH);
         JPanel postHolder = new JPanel(new BorderLayout());
         postHolder.setOpaque(false);
         postHolder.setBorder(new EmptyBorder(0, 24, 6, 24));
-        postHolder.add(muted("Đang tải bài viết…"), BorderLayout.NORTH);
-        JLabel commentsHeading = contextHeading("BÌNH LUẬN");
+        postHolder.add(muted(tr("Đang tải bài viết…", "Loading post…")), BorderLayout.NORTH);
+        JLabel commentsHeading = contextHeading(tr("BÌNH LUẬN", "COMMENTS"));
         commentsHeading.setBorder(new EmptyBorder(14, 0, 0, 0));
         JPanel postBlock = new JPanel(new BorderLayout());
         postBlock.setOpaque(false);
@@ -466,6 +461,8 @@ final class FeedView extends ViewSupport {
                     BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.BORDER), new EmptyBorder(12, 4, 10, 4)));
             String author = str(comment, "authorName", "displayName");
             Theme.Avatar face = new Theme.Avatar(author, 32, false);
+            String cAvatar = str(comment, "authorAvatarMediaId");
+            if (!cAvatar.isBlank()) app.thumbnails.load(cAvatar, 64, icon -> { face.setImage(icon.getImage()); c.repaint(); });
             JPanel faceSlot = new JPanel(new BorderLayout());
             faceSlot.setOpaque(false);
             faceSlot.add(face, BorderLayout.NORTH);
@@ -481,15 +478,17 @@ final class FeedView extends ViewSupport {
             JPanel nameRow = horizontal(who, muted(time(comment)));
             nameRow.setAlignmentX(Component.LEFT_ALIGNMENT);
             body.add(nameRow);
-            JTextArea content = readable(bool(comment, "tombstone") ? "Nội dung bình luận không khả dụng" : str(comment, "content"));
+            JTextArea content = readable(bool(comment, "tombstone")
+                    ? tr("Nội dung bình luận không khả dụng", "Comment unavailable")
+                    : str(comment, "content"));
             content.setAlignmentX(Component.LEFT_ALIGNMENT);
             if (bool(comment, "tombstone")) content.setForeground(Theme.MUTED);
             body.add(content);
             if (!bool(comment, "tombstone")) {
-                JPanel actions = horizontal(ghost("Báo cáo", () -> report("COMMENT", id(comment, "comment"))));
+                JPanel actions = horizontal(ghost(tr("Báo cáo", "Report"), () -> report("COMMENT", id(comment, "comment"))));
                 if (num(comment, "authorId") == id(app.currentUser, "user") || postOwner[0] == id(app.currentUser, "user")) {
-                    actions.add(danger("Xóa", () -> {
-                        if (confirm("Xóa bình luận này?")) {
+                    actions.add(danger(tr("Xóa", "Delete"), () -> {
+                        if (confirm(tr("Xóa bình luận này?", "Delete this comment?"))) {
                             mutate("COMMENT_DELETE", of("commentId", id(comment, "comment")), null, r -> showPost(postId));
                         }
                     }));
@@ -501,21 +500,26 @@ final class FeedView extends ViewSupport {
             return c;
         });
         comments.emptyIcon = AppIcon.Type.CHAT;
-        comments.emptyTitle = "Chưa có bình luận";
-        comments.emptyHint = "Hãy là người đầu tiên chia sẻ ý kiến về bài viết này.";
+        comments.emptyTitle = tr("Chưa có bình luận", "No comments yet");
+        comments.emptyHint = tr("Hãy là người đầu tiên chia sẻ ý kiến về bài viết này.", "Be the first to share your thoughts on this post.");
 
         panel.add(comments.panel, BorderLayout.CENTER);
         JTextArea input = text("", 2);
-        JButton send = Theme.primaryButton("Bình luận");
+        JButton send = Theme.primaryButton(tr("Bình luận", "Comment"));
         send.addActionListener(e -> {
-            if (!input.getText().isBlank()) {
-                mutate("COMMENT_CREATE", of("postId", postId, "content", input.getText()), send, r -> {
+            String cText = input.getText().trim();
+            if (cText.length() > 1000) {
+                warn(tr("Bình luận tối đa 1.000 ký tự.", "Comment cannot exceed 1,000 characters."));
+                return;
+            }
+            if (!cText.isEmpty()) {
+                mutate("COMMENT_CREATE", of("postId", postId, "content", cText), send, r -> {
                     input.setText("");
                     showPost(postId);
                 });
             }
         });
-        input.putClientProperty("JTextField.placeholderText", "Viết bình luận…");
+        input.putClientProperty("JTextField.placeholderText", tr("Viết bình luận…", "Write a comment…"));
         JScrollPane commentFrame = framed(input);
         commentFrame.setPreferredSize(new Dimension(Theme.COLUMN_WIDTH - 130, 64));
         JPanel composerBox = new JPanel(new BorderLayout(10, 0));
@@ -541,7 +545,7 @@ final class FeedView extends ViewSupport {
             postOwner[0] = num(post, "authorId");
             postHolder.removeAll();
             postHolder.add(postCard(post), BorderLayout.NORTH);
-            commentsHeading.setText("BÌNH LUẬN · " + num(post, "commentCount"));
+            commentsHeading.setText(tr("BÌNH LUẬN · ", "COMMENTS · ") + num(post, "commentCount"));
             postHolder.revalidate();
             postHolder.repaint();
             if (bool(post, "unavailable") || "HIDDEN".equals(str(post, "status"))) {
@@ -550,8 +554,9 @@ final class FeedView extends ViewSupport {
                 panel.remove(comments.panel);
                 JPanel gone = new JPanel(new GridBagLayout());
                 gone.setOpaque(false);
-                gone.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.SHIELD, Theme.MUTED, 28), "Bài viết không khả dụng",
-                        "Bình luận và tương tác đã bị tắt cho bài viết này."));
+                gone.add(ModernUI.emptyState(new AppIcon(AppIcon.Type.SHIELD, Theme.MUTED, 28),
+                        tr("Bài viết không khả dụng", "Post Unavailable"),
+                        tr("Bình luận và tương tác đã bị tắt cho bài viết này.", "Comments and interactions are disabled for this post.")));
                 panel.add(gone, BorderLayout.CENTER);
                 panel.revalidate();
             } else {

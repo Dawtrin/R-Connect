@@ -88,7 +88,10 @@ public final class ServerMonitor {
             JLabel appTitle = new JLabel("R-CONNECT · SERVER DASHBOARD");
             appTitle.setFont(new Font("Segoe UI", Font.BOLD, 19));
             appTitle.setForeground(TEXT_MAIN);
-            JLabel appSubtitle = new JLabel("Giám sát thời gian thực kiến trúc Client–Server TCP Raw Sockets (Cổng 5000)");
+            String udpDesc = config.udpEnabled()
+                    ? " · UDP Discovery: " + server.discoveryPort() + " / Typing: " + server.typingPort()
+                    : "";
+            JLabel appSubtitle = new JLabel("Giám sát thời gian thực kiến trúc Client–Server TCP/UDP (TCP: " + server.tcpPort() + udpDesc + ")");
             appSubtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
             appSubtitle.setForeground(TEXT_MUTED);
             titleTexts.add(appTitle);
@@ -180,7 +183,7 @@ public final class ServerMonitor {
                 private void filter() {
                     String query = txtSearchClient.getText().trim();
                     if (query.isEmpty()) clientSorter.setRowFilter(null);
-                    else clientSorter.setRowFilter(RowFilter.regexFilter("(?i)" + query));
+                    else clientSorter.setRowFilter(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(query)));
                 }
             });
 
@@ -269,7 +272,11 @@ public final class ServerMonitor {
             HealthItem itemDatabase = new HealthItem("Cơ sở dữ liệu SQLite", "Sẵn sàng và toàn vẹn", config.databasePath().toAbsolutePath().toString());
             HealthItem itemStorage = new HealthItem("Lưu trữ tệp đa phương tiện", "Thư mục khả dụng", config.storageRoot().toAbsolutePath().toString());
             HealthItem itemLimits = new HealthItem("Giới hạn kết nối TCP", "An toàn: tối đa " + config.maxConnections() + " kết nối", "Hạn ngạch người dùng: " + (config.userQuota() / (1024 * 1024)) + " MiB");
-            HealthItem itemSecurity = new HealthItem("Chính sách truyền thông", "TCP Plain Socket (Đồ án sinh viên)", "Không dùng TLS/SSL, UDP disabled mặc định.");
+            HealthItem itemSecurity = new HealthItem("Chính sách truyền thông",
+                    config.udpEnabled() ? "Hybrid TCP + UDP (Đang hoạt động)" : "TCP Plain Socket",
+                    config.udpEnabled()
+                            ? "TCP Port " + server.tcpPort() + " · UDP Discovery " + server.discoveryPort() + " · UDP Realtime " + server.typingPort()
+                            : "Không dùng TLS/SSL, UDP đang tắt trong cấu hình.");
             HealthItem itemJvm = new HealthItem("Bộ nhớ JVM (Java Runtime)", "Đang tải thông số...", "Java " + System.getProperty("java.version"));
 
             healthGrid.add(itemServer);

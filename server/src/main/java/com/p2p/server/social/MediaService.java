@@ -358,7 +358,9 @@ public final class MediaService implements AutoCloseable {
 
     private Map<String,Object> thumbnail(long actor,String id) throws Exception {
         if(!policy.canAccessMedia(actor,id))throw error("NOT_FOUND","Không tìm thấy ảnh");
-        Map<String,Object> m=media(id);if("CHAT_FILE".equals(m.get("purpose")))throw error("INVALID_REQUEST","Tệp không phải ảnh");
+        Map<String,Object> m=media(id);
+        String mime=String.valueOf(m.getOrDefault("mime_type","")).toLowerCase(Locale.ROOT);
+        if("CHAT_FILE".equals(m.get("purpose"))&&!Set.of("image/png","image/jpeg","image/jpg").contains(mime))throw error("INVALID_REQUEST","Tệp không phải ảnh");
         Path path=thumbnailPath(id);if(!Files.isRegularFile(path))createThumbnail(m);
         if(!policy.canAccessMedia(actor,id))throw error("NOT_FOUND","Quyền xem ảnh đã thay đổi");
         byte[] bytes=Files.readAllBytes(path);if(bytes.length>300000)throw error("FILE_TOO_LARGE","Thumbnail vượt giới hạn");
@@ -367,7 +369,11 @@ public final class MediaService implements AutoCloseable {
         return Map.of("mediaId",id,"mimeType","image/png","data",Base64.getEncoder().encodeToString(bytes),"size",bytes.length,"sha256",digest);
     }
     private void createThumbnail(Map<String,Object> m) throws Exception {
-        BufferedImage source=ImageIO.read(object(m).toFile());if(source==null)throw error("INVALID_REQUEST","Ảnh không đọc được");
+        Path objPath=object(m);
+        if(!Files.isRegularFile(objPath))throw error("NOT_FOUND","Tệp ảnh không còn tồn tại trên máy chủ");
+        BufferedImage source;
+        try{source=ImageIO.read(objPath.toFile());}catch(IOException e){throw error("INVALID_REQUEST","Ảnh không đọc được");}
+        if(source==null)throw error("INVALID_REQUEST","Ảnh không đọc được");
         double scale=Math.min(1.0,256.0/Math.max(source.getWidth(),source.getHeight()));
         BufferedImage thumb=new BufferedImage(Math.max(1,(int)(source.getWidth()*scale)),Math.max(1,(int)(source.getHeight()*scale)),BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics=thumb.createGraphics();try{graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BILINEAR);graphics.drawImage(source,0,0,thumb.getWidth(),thumb.getHeight(),null);}finally{graphics.dispose();}
